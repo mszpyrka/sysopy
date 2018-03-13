@@ -3,160 +3,172 @@
 #include <string.h>
 #include <time.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 #include "mylib.h"
 
 char* get_random_string(int length)
 {
     char* string = calloc(length, sizeof(char));
     for(int i = 0; i < length; i++)
-        string[i] = (char)(rand() % 95 + 33); // all ascii codes for non-white characters
-        
+        string[i] = (char)(rand() % 95 + 33); // all ascii codes of non-white characters
+
     return string;
 }
 
-void print_static(static_array* array)
+double subtract_time(struct timeval a, struct timeval b)
 {
-    for(int i = 0; i < array -> array_length; i++)
-    {
-        printf("%d:\t", i);
-        for(int j = 0; j < array -> block_lengths[i]; j++)
-            printf("%c", array -> blocks[i][j]);
-        
-        printf("\n");
-    }
+    double tmp_a = ((double) a.tv_sec) + ((double) a.tv_usec) / 1000000;
+    double tmp_b = ((double) b.tv_sec) + ((double) b.tv_usec) / 1000000;
+    return tmp_a - tmp_b;
 }
 
-void print_dynamic(dynamic_array* array)
+void print_time(double d)
 {
-    for(int i = 0; i < array -> array_length; i++)
-    {
-        printf("%d:\t", i);
-        for(int j = 0; j < array -> block_lengths[i]; j++)
-            printf("%c", array -> blocks[i][j]);
-        
-        printf("\n");
-    }
+    int minutes = ((int) d) / 60;
+    double seconds = d - ((double) minutes);
+    printf("%dm%.3fs\n", minutes, seconds);
 }
 
 void static_test(int array_length, int block_length)
 {
     printf("testing static structure...\n");
-    
+
     static_array array = init_static_array(array_length);
-    
+
     char* buffer = calloc(20, sizeof(char));
     int index;
-    
+
     while(strcmp(buffer, "exit") != 0)
     {
         struct rusage ru;
-        struct timeval sys_start, sys_end, user_start, user_end;
-        
-        getrusage(RUSAGE_SELF, &ru);
-        sys_start = ru.ru_stime;
-        user_start = ru.ru_utime;
-        
+        struct timeval real_start, real_end, sys_start, sys_end, user_start, user_end;
+
         scanf("%s", buffer);
         if(strcmp(buffer, "add") == 0)
         {
             scanf("%d", &index);
             char* str = get_random_string(block_length);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru);
             static_add_block(&array, str, block_length, index);
         }
-        
+
         else if(strcmp(buffer, "delete") == 0)
         {
             scanf("%d", &index);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru);
             static_delete_block(&array, index);
         }
-        
+
         else if(strcmp(buffer, "find") == 0)
         {
             scanf("%d", &index);
-            int result = static_find_nearest_block(&array, index);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru);
+            static_find_nearest_block(&array, index);
+            //int result = static_find_nearest_block(&array, index);
             //printf("%d\n", result);
         }
-        
+
         else if(strcmp(buffer, "exit") == 0)
         {
             //print_static(&array);
             exit(0);
         }
-        
+
         else
         {
             fprintf(stderr, "unknown command: %s\n", buffer);
         }
-        
+
+        sys_start = ru.ru_stime;
+        user_start = ru.ru_utime;
+
+        gettimeofday(&real_end, NULL);
         getrusage(RUSAGE_SELF, &ru);
         sys_end = ru.ru_stime;
         user_end = ru.ru_utime;
-        
+
         printf("%s execution time:\n", buffer);
-        printf("real\t%d\n", 0);
-        printf("user\t%ld.%lds\n", user_end.tv_sec - user_start.tv_sec, user_end.tv_usec - user_start.tv_usec);
-        printf("sys\t%ld.%lds\n", sys_end.tv_sec - sys_start.tv_sec, sys_end.tv_usec - sys_start.tv_usec);
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
     }
 }
 
 void dynamic_test(int array_length, int block_length)
 {
     printf("testing dynamic structure...\n");
-    
+
     dynamic_array array = init_dynamic_array(array_length);
-    
+
     char* buffer = calloc(20, sizeof(char));
     int index;
-    
+
     while(strcmp(buffer, "exit") != 0)
     {
         struct rusage ru;
         struct timeval sys_start, sys_end, user_start, user_end;
-        
-        getrusage(RUSAGE_SELF, &ru);
-        sys_start = ru.ru_stime;
-        user_start = ru.ru_utime;
-        
+
         scanf("%s", buffer);
         if(strcmp(buffer, "add") == 0)
         {
             scanf("%d", &index);
             char* str = get_random_string(block_length);
+
+            getrusage(RUSAGE_SELF, &ru);
             dynamic_add_block(&array, str, block_length, index);
         }
-        
+
         else if(strcmp(buffer, "delete") == 0)
         {
             scanf("%d", &index);
+
+            getrusage(RUSAGE_SELF, &ru);
             dynamic_delete_block(&array, index);
         }
-        
+
         else if(strcmp(buffer, "find") == 0)
         {
             scanf("%d", &index);
-            int result = dynamic_find_nearest_block(&array, index);
+
+            getrusage(RUSAGE_SELF, &ru);
+            dynamic_find_nearest_block(&array, index);
+            //int result = dynamic_find_nearest_block(&array, index);
             //printf("%d\n", result);
         }
-        
+
         else if(strcmp(buffer, "exit") == 0)
         {
             //print_dynamic(&array);
             exit(0);
         }
-        
+
         else
         {
             fprintf(stderr, "unknown command: %s\n", buffer);
         }
-        
+
+        sys_start = ru.ru_stime;
+        user_start = ru.ru_utime;
+
         getrusage(RUSAGE_SELF, &ru);
         sys_end = ru.ru_stime;
         user_end = ru.ru_utime;
-        
+
         printf("%s execution time:\n", buffer);
         printf("real\t%d\n", 0);
-        printf("user\t%lu.%06u\n", user_end.tv_sec - user_start.tv_sec, user_end.tv_usec - user_start.tv_usec);
-        printf("sys\t%lu.%06u\n", sys_end.tv_sec - sys_start.tv_sec, sys_end.tv_usec - sys_start.tv_usec);
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
     }
 }
 
@@ -164,24 +176,24 @@ void dynamic_test(int array_length, int block_length)
 int main(int argc, char** argv)
 {
     srand(time(NULL));
-    if(argc < 4)
+    if(argc != 4)
     {
-        fprintf(stderr, "wrong arguments format\n");
+        fprintf(stderr, "wrong arguments number\n");
         exit(1);
     }
-    
-    int array_length = atoi(argv[1]);
-    int block_length = atoi(argv[2]);
-    
-    if(strcmp(argv[3], "static") == 0)
+
+    int array_length = atoi(argv[2]);
+    int block_length = atoi(argv[3]);
+
+    if(strcmp(argv[1], "static") == 0)
         static_test(array_length, block_length);
-    
-    else if(strcmp(argv[3], "dynamic") == 0)
+
+    else if(strcmp(argv[1], "dynamic") == 0)
         dynamic_test(array_length, block_length);
-    
+
     else
     {
-        fprintf(stderr, "third argument should either be 'static' or 'dynamic'\n");
+        fprintf(stderr, "first argument should either be 'static' or 'dynamic'\n");
         exit(1);
     }
 }

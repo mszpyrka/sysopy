@@ -2,7 +2,7 @@
 #define MYLIB_H
 
 #define STATIC_ARRAY_MAX_SIZE 100
-#define STATIC_CHAR_BLOCK_MAX_SIZE 100
+#define STATIC_CHAR_BLOCK_MAX_SIZE 1000000
 
 typedef struct static_array
 {
