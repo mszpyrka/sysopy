@@ -33,7 +33,8 @@ void static_test(int array_length, int block_length)
 {
     printf("testing static structure...\n");
 
-    static_array array = init_static_array(array_length);
+    static_array array;
+    init_static_array(&array, array_length);
 
     char* buffer = calloc(20, sizeof(char));
     int index;
@@ -107,15 +108,16 @@ void dynamic_test(int array_length, int block_length)
 {
     printf("testing dynamic structure...\n");
 
-    dynamic_array array = init_dynamic_array(array_length);
+    dynamic_array array;
+    init_dynamic_array(&array, array_length);
 
     char* buffer = calloc(20, sizeof(char));
     int index;
 
     while(strcmp(buffer, "exit") != 0)
     {
-        struct rusage ru;
-        struct timeval sys_start, sys_end, user_start, user_end;
+        struct rusage ru_start, ru_end;
+        struct timeval real_start, real_end, sys_start, sys_end, user_start, user_end;
 
         scanf("%s", buffer);
         if(strcmp(buffer, "add") == 0)
@@ -123,24 +125,33 @@ void dynamic_test(int array_length, int block_length)
             scanf("%d", &index);
             char* str = get_random_string(block_length);
 
-            getrusage(RUSAGE_SELF, &ru);
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
             dynamic_add_block(&array, str, block_length, index);
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
         }
 
         else if(strcmp(buffer, "delete") == 0)
         {
             scanf("%d", &index);
 
-            getrusage(RUSAGE_SELF, &ru);
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
             dynamic_delete_block(&array, index);
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
         }
 
         else if(strcmp(buffer, "find") == 0)
         {
             scanf("%d", &index);
 
-            getrusage(RUSAGE_SELF, &ru);
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
             dynamic_find_nearest_block(&array, index);
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
             //int result = dynamic_find_nearest_block(&array, index);
             //printf("%d\n", result);
         }
@@ -156,15 +167,14 @@ void dynamic_test(int array_length, int block_length)
             fprintf(stderr, "unknown command: %s\n", buffer);
         }
 
-        sys_start = ru.ru_stime;
-        user_start = ru.ru_utime;
-
-        getrusage(RUSAGE_SELF, &ru);
-        sys_end = ru.ru_stime;
-        user_end = ru.ru_utime;
+        sys_start = ru_start.ru_stime;
+        user_start = ru_start.ru_utime;
+        sys_end = ru_end.ru_stime;
+        user_end = ru_end.ru_utime;
 
         printf("%s execution time:\n", buffer);
-        printf("real\t%d\n", 0);
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
         printf("user\t");
         print_time(subtract_time(user_end, user_start));
         printf("sys\t");
