@@ -11,8 +11,8 @@ shared: mylib.c libtest.c mylib.h
 	gcc $(GCC_FLAGS) -fPIC -c mylib.c -o mylib.o
 	gcc $(GCC_FLAGS) -c libtest.c -o libtest.o
 	gcc $(GCC_FLAGS) -shared -o libshared.so mylib.o
-	gcc $(GCC_FLAGS) libtest.o -o libtest_shared -L. -lshared
+	gcc $(GCC_FLAGS) libtest.o -o libtest_shared -L. -lshared -Wl,-rpath=`pwd`
 	rm -f *.o
 
 clean:
-	rm -f *.o
+	rm -f *.o *.a *.so libtest_static libtest_shared
