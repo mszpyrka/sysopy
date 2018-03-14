@@ -227,24 +227,284 @@ void dynamic_test(int array_length, int block_length)
     }
 }
 
+void static_t(int argc, char** argv)
+{
+    static_array array;
+    int array_length;
+    int block_length;
+
+    struct rusage ru_start, ru_end;
+    struct timeval real_start, real_end, sys_start, sys_end, user_start, user_end;
+
+    if(strcmp(argv[2], "create_table") == 0)
+    {
+        array_length = atoi(argv[3]);
+        block_length = atoi(argv[4]);
+
+        gettimeofday(&real_start, NULL);
+        getrusage(RUSAGE_SELF, &ru_start);
+        init_static_array(&array, array_length);
+        gettimeofday(&real_end, NULL);
+        getrusage(RUSAGE_SELF, &ru_end);
+
+        printf("create_table execution time:\n");
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
+    }
+
+    else
+    {
+        fprintf(stderr, "cannot perform any operations on uninitialized table");
+        exit(1);
+    }
+
+    int i = 5;
+    while(i < argc)
+    {
+        char* buffer = argv[i];
+
+        if(strcmp(argv[i], "search_element") == 0)
+        {
+            int number = atoi(argv[i+1]);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+            static_find_nearest_block(&array, number);
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "add") == 0)
+        {
+            int number = atoi(argv[i+1]);
+            char* random_str = get_random_string(block_length);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                static_add_block(&array, random_str, block_length, number);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "remove") == 0)
+        {
+            int number = atoi(argv[i+1]);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                static_delete_block(&array, number);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "add_and_remove") == 0)
+        {
+            int number = atoi(argv[i+1]);
+            char* random_str = get_random_string(block_length);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                static_add_block(&array, random_str, block_length, 0);
+                static_delete_block(&array, 0);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else
+        {
+            fprintf(stderr, "unknown command: %s\n", argv[i]);
+            exit(1);
+        }
+
+        sys_start = ru_start.ru_stime;
+        user_start = ru_start.ru_utime;
+        sys_end = ru_end.ru_stime;
+        user_end = ru_end.ru_utime;
+
+        printf("%s execution time:\n", buffer);
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
+
+    }
+}
+
+void dynamic_t(int argc, char** argv)
+{
+    dynamic_array array;
+    int array_length;
+    int block_length;
+
+    struct rusage ru_start, ru_end;
+    struct timeval real_start, real_end, sys_start, sys_end, user_start, user_end;
+
+    if(strcmp(argv[2], "create_table") == 0)
+    {
+        array_length = atoi(argv[3]);
+        block_length = atoi(argv[4]);
+
+        gettimeofday(&real_start, NULL);
+        getrusage(RUSAGE_SELF, &ru_start);
+        init_dynamic_array(&array, array_length);
+        gettimeofday(&real_end, NULL);
+        getrusage(RUSAGE_SELF, &ru_end);
+
+        printf("create_table execution time:\n");
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
+    }
+
+    else
+    {
+        fprintf(stderr, "cannot perform any operations on uninitialized table");
+        exit(1);
+    }
+
+    int i = 5;
+    while(i < argc)
+    {
+        char* buffer = argv[i];
+
+        if(strcmp(argv[i], "search_element") == 0)
+        {
+            int number = atoi(argv[i+1]);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+            dynamic_find_nearest_block(&array, number);
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "add") == 0)
+        {
+            int number = atoi(argv[i+1]);
+            char* random_str = get_random_string(block_length);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                dynamic_add_block(&array, random_str, block_length, number);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "remove") == 0)
+        {
+            int number = atoi(argv[i+1]);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                dynamic_delete_block(&array, number);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else if(strcmp(argv[i], "add_and_remove") == 0)
+        {
+            int number = atoi(argv[i+1]);
+            char* random_str = get_random_string(block_length);
+
+            gettimeofday(&real_start, NULL);
+            getrusage(RUSAGE_SELF, &ru_start);
+
+            while(number)
+            {
+                number--;
+                dynamic_add_block(&array, random_str, block_length, 0);
+                dynamic_delete_block(&array, 0);
+            }
+
+            gettimeofday(&real_end, NULL);
+            getrusage(RUSAGE_SELF, &ru_end);
+
+            i += 2;
+        }
+
+        else
+        {
+            fprintf(stderr, "unknown command: %s\n", argv[i]);
+            exit(1);
+        }
+
+        sys_start = ru_start.ru_stime;
+        user_start = ru_start.ru_utime;
+        sys_end = ru_end.ru_stime;
+        user_end = ru_end.ru_utime;
+
+        printf("%s execution time:\n", buffer);
+        printf("real\t");
+        print_time(subtract_time(real_end, real_start));
+        printf("user\t");
+        print_time(subtract_time(user_end, user_start));
+        printf("sys\t");
+        print_time(subtract_time(sys_end, sys_start));
+    }
+}
 
 int main(int argc, char** argv)
 {
     srand(time(NULL));
-    if(argc != 4)
-    {
-        fprintf(stderr, "wrong arguments number\n");
-        exit(1);
-    }
-
-    int array_length = atoi(argv[2]);
-    int block_length = atoi(argv[3]);
 
     if(strcmp(argv[1], "static") == 0)
-        static_test(array_length, block_length);
+        static_t(argc, argv);
 
     else if(strcmp(argv[1], "dynamic") == 0)
-        dynamic_test(array_length, block_length);
+        dynamic_t(argc, argv);
 
     else
     {
