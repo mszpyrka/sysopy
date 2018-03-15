@@ -25,6 +25,8 @@ void init_static_array(static_array* array, int array_length)
 }
 
 
+
+
 int static_find_nearest_block(static_array* array, int index)
 {
     int target_value = get_block_sum(array -> blocks[index], array -> block_lengths[index]);
@@ -69,8 +71,6 @@ void init_dynamic_array(dynamic_array* array, int array_length)
     array -> array_length = array_length;
     array -> blocks = calloc(array_length, sizeof(char*));
     array -> block_lengths = calloc(array_length, sizeof(int));
-    for(int i = 0; i < array_length; i++)
-        array -> block_lengths[i] = 0;
 }
 
 

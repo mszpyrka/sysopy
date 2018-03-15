@@ -4,6 +4,7 @@
 #include <sys/resource.h>
 #include <time.h>
 #include <sys/time.h>
+#include <dlfcn.h>
 #include "mylib.h"
 
 char* get_random_string(int length)
@@ -31,6 +32,23 @@ void print_time(double t)
 
 void static_t(int argc, char** argv)
 {
+    void* handle = dlopen("./libshared.so", RTLD_LAZY);
+    if(!handle)
+    {
+        fprintf(stderr, "error occured while loading library:\n");
+        fprintf(stderr, "%s\n", dlerror());
+        exit(1);
+    }
+
+    void (*d_init_static_array)(static_array*, int);
+    d_init_static_array = dlsym(handle, "init_static_array");
+    int (*d_static_find_nearest_block)(static_array*, int);
+    d_static_find_nearest_block = dlsym(handle, "static_find_nearest_block");
+    void (*d_static_add_block)(static_array*, const char*, int, int);
+    d_static_add_block = dlsym(handle, "static_add_block");
+    void (*d_static_delete_block)(static_array*, int);
+    d_static_delete_block = dlsym(handle, "static_delete_block");
+
     static_array array;
     int array_length;
     int block_length;
@@ -47,7 +65,7 @@ void static_t(int argc, char** argv)
         real_start = clock();
 
         getrusage(RUSAGE_SELF, &ru_start);
-        init_static_array(&array, array_length);
+        d_init_static_array(&array, array_length);
         real_end = clock();
 
         getrusage(RUSAGE_SELF, &ru_end);
@@ -83,7 +101,7 @@ void static_t(int argc, char** argv)
 
             real_start = clock();
             getrusage(RUSAGE_SELF, &ru_start);
-            static_find_nearest_block(&array, number);
+            d_static_find_nearest_block(&array, number);
             real_end = clock();
             getrusage(RUSAGE_SELF, &ru_end);
 
@@ -101,7 +119,7 @@ void static_t(int argc, char** argv)
             while(number)
             {
                 number--;
-                static_add_block(&array, random_str, block_length, number);
+                d_static_add_block(&array, random_str, block_length, number);
             }
 
             real_end = clock();
@@ -120,7 +138,7 @@ void static_t(int argc, char** argv)
             while(number)
             {
                 number--;
-                static_delete_block(&array, number);
+                d_static_delete_block(&array, number);
             }
 
             real_end = clock();
@@ -140,8 +158,8 @@ void static_t(int argc, char** argv)
             while(number >= 0)
             {
                 number--;
-                static_add_block(&array, random_str, block_length, 0);
-                static_delete_block(&array, 0);
+                d_static_add_block(&array, random_str, block_length, 0);
+                d_static_delete_block(&array, 0);
             }
 
             real_end = clock();
@@ -170,10 +188,29 @@ void static_t(int argc, char** argv)
         print_time(subtract_time(sys_end, sys_start));
 
     }
+
+    dlclose(handle);
 }
 
 void dynamic_t(int argc, char** argv)
 {
+    void* handle = dlopen("libshared.so", RTLD_LAZY);
+    if(!handle)
+    {
+        fprintf(stderr, "error occured while loading library:\n");
+        fprintf(stderr, "%s\n", dlerror());
+        exit(1);
+    }
+
+    void (*init_dynamic_array)(dynamic_array*, int);
+    init_dynamic_array = dlsym(handle, "init_dynamic_array");
+    int (*dynamic_find_nearest_block)(dynamic_array*, int);
+    dynamic_find_nearest_block = dlsym(handle, "dynamic_find_nearest_block");
+    void (*dynamic_add_block)(dynamic_array*, const char*, int, int);
+    dynamic_add_block = dlsym(handle, "dynamic_add_block");
+    void (*dynamic_delete_block)(dynamic_array*, int);
+    dynamic_delete_block = dlsym(handle, "dynamic_delete_block");
+
     dynamic_array array;
     int array_length;
     int block_length;
@@ -311,6 +348,8 @@ void dynamic_t(int argc, char** argv)
         print_time(subtract_time(sys_end, sys_start));
 
     }
+
+    dlclose(handle);
 }
 
 int main(int argc, char** argv)
