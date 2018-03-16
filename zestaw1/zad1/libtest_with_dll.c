@@ -194,7 +194,7 @@ void static_t(int argc, char** argv)
 
 void dynamic_t(int argc, char** argv)
 {
-    void* handle = dlopen("libshared.so", RTLD_LAZY);
+    void* handle = dlopen("./libshared.so", RTLD_LAZY);
     if(!handle)
     {
         fprintf(stderr, "error occured while loading library:\n");
@@ -202,14 +202,14 @@ void dynamic_t(int argc, char** argv)
         exit(1);
     }
 
-    void (*init_dynamic_array)(dynamic_array*, int);
-    init_dynamic_array = dlsym(handle, "init_dynamic_array");
-    int (*dynamic_find_nearest_block)(dynamic_array*, int);
-    dynamic_find_nearest_block = dlsym(handle, "dynamic_find_nearest_block");
-    void (*dynamic_add_block)(dynamic_array*, const char*, int, int);
-    dynamic_add_block = dlsym(handle, "dynamic_add_block");
-    void (*dynamic_delete_block)(dynamic_array*, int);
-    dynamic_delete_block = dlsym(handle, "dynamic_delete_block");
+    void (*d_init_dynamic_array)(dynamic_array*, int);
+    d_init_dynamic_array = dlsym(handle, "init_dynamic_array");
+    int (*d_dynamic_find_nearest_block)(dynamic_array*, int);
+    d_dynamic_find_nearest_block = dlsym(handle, "dynamic_find_nearest_block");
+    void (*d_dynamic_add_block)(dynamic_array*, const char*, int, int);
+    d_dynamic_add_block = dlsym(handle, "dynamic_add_block");
+    void (*d_dynamic_delete_block)(dynamic_array*, int);
+    d_dynamic_delete_block = dlsym(handle, "dynamic_delete_block");
 
     dynamic_array array;
     int array_length;
@@ -226,7 +226,7 @@ void dynamic_t(int argc, char** argv)
 
         real_start = clock();
         getrusage(RUSAGE_SELF, &ru_start);
-        init_dynamic_array(&array, array_length);
+        d_init_dynamic_array(&array, array_length);
         real_end = clock();
         getrusage(RUSAGE_SELF, &ru_end);
 
@@ -261,7 +261,7 @@ void dynamic_t(int argc, char** argv)
 
             real_start = clock();
             getrusage(RUSAGE_SELF, &ru_start);
-            dynamic_find_nearest_block(&array, number);
+            d_dynamic_find_nearest_block(&array, number);
             real_end = clock();
             getrusage(RUSAGE_SELF, &ru_end);
 
@@ -279,7 +279,7 @@ void dynamic_t(int argc, char** argv)
             while(number)
             {
                 number--;
-                dynamic_add_block(&array, random_str, block_length, number);
+                d_dynamic_add_block(&array, random_str, block_length, number);
             }
 
             real_end = clock();
@@ -298,7 +298,7 @@ void dynamic_t(int argc, char** argv)
             while(number)
             {
                 number--;
-                dynamic_delete_block(&array, number);
+                d_dynamic_delete_block(&array, number);
             }
 
             real_end = clock();
@@ -318,8 +318,8 @@ void dynamic_t(int argc, char** argv)
             while(number >= 0)
             {
                 number--;
-                dynamic_add_block(&array, random_str, block_length, 0);
-                dynamic_delete_block(&array, 0);
+                d_dynamic_add_block(&array, random_str, block_length, 0);
+                d_dynamic_delete_block(&array, 0);
             }
 
             real_end = clock();
