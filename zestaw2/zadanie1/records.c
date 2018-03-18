@@ -60,7 +60,7 @@ void generate(int argc, char** argv) {
 // Copies file
 void copy(int argc, char** argv) {
 
-    if(argc < 6) {
+    if(argc < 7) {
 
         fprintf(stderr, "wrong arguments format\n");
         exit(1);
@@ -159,9 +159,191 @@ void copy(int argc, char** argv) {
     }
 }
 
+// Sorts records in a file with insertion sort algorithm
 void sort(int argc, char** argv) {
 
+    if(argc < 6) {
 
+        fprintf(stderr, "wrong arguments format\n");
+        exit(1);
+    }
+
+    // Parsing all necessary arguments
+
+    char* filename = argv[2];
+    int records_number = atoi(argv[3]);
+    int records_length = atoi(argv[4]);
+    char* mode = argv[5];
+
+    char* uninserted = malloc(records_length * sizeof(char));
+    char* swap_buffer = malloc(records_length * sizeof(char));
+
+    // Sorting file using C standard library functions
+
+    if(strcmp(mode, "lib") == 0) {
+
+        FILE* file = fopen(filename, "rw");
+
+        if(file == NULL) {
+
+            fprintf(stderr, "error occurred while opening file\n");
+            exit(1);
+        }
+
+        for(int i = 1; i < records_number; i++) {
+
+            int next_record_position = records_length * i;
+
+            if(fseek(file, next_record_position, SEEK_SET) != 0) {
+
+                fprintf(stderr, "error occurred while setting file position\n");
+                exit(1);
+            }
+
+            if(fread(uninserted, sizeof(char), records_length, file) != records_length){
+
+                fprintf(stderr, "error occurred while reading from file\n");
+                exit(1);
+            }
+
+            for(int record_iterator = next_record_position; record_iterator > 0; record_iterator -= records_length) {
+
+                if(fseek(file, record_iterator - records_length, SEEK_SET) != 0) {
+
+                    fprintf(stderr, "error occurred while setting file position\n");
+                    exit(1);
+                }
+
+                if(fread(swap_buffer, sizeof(char), records_length, file) != records_length){
+
+                    fprintf(stderr, "error occurred while reading from file\n");
+                    exit(1);
+                }
+
+                if(uninserted[0] > swap_buffer[0]) {
+
+                    if(fseek(file, record_iterator, SEEK_SET) != 0) {
+
+                        fprintf(stderr, "error occurred while setting file position\n");
+                        exit(1);
+                    }
+
+                    if(fwrite(uninserted, sizeof(char), records_length, file) != records_length){
+
+                        fprintf(stderr, "error occurred while writing into file\n");
+                        exit(1);
+                    }
+
+                    break;
+                }
+
+                else {
+
+                    if(fseek(file, record_iterator, SEEK_SET) != 0) {
+
+                        fprintf(stderr, "error occurred while setting file position\n");
+                        exit(1);
+                    }
+
+                    if(fwrite(swap_buffer, sizeof(char), records_length, file) != records_length){
+
+                        fprintf(stderr, "error occurred while writing into file\n");
+                        exit(1);
+                    }
+                }
+            }
+        }
+
+        if(fclose(file)) {
+
+            fprintf(stderr, "error occurred while closing file\n");
+            exit(1);
+        }
+
+    }
+
+    else if(strcmp(mode, "sys") == 0) {
+
+        int file_desc = open(filename, O_RDWR);
+
+        if(file_desc < 0) {
+
+            fprintf(stderr, "error occurred while opening file\n");
+            exit(1);
+        }
+
+        for(int i = 1; i < records_number; i++) {
+
+            int next_record_position = records_length * i;
+
+            if(lseek(file_desc, next_record_position, SEEK_SET) != 0) {
+
+                fprintf(stderr, "error occurred while setting file position\n");
+                exit(1);
+            }
+
+            if(read(file_desc, uninserted, records_length * sizeof(char)) != records_length){
+
+                fprintf(stderr, "error occurred while reading from file\n");
+                exit(1);
+            }
+
+            for(int record_iterator = next_record_position; record_iterator > 0; record_iterator -= records_length) {
+
+                if(lseek(file_desc, record_iterator - records_length, SEEK_SET) != 0) {
+
+                    fprintf(stderr, "error occurred while setting file position\n");
+                    exit(1);
+                }
+
+                if(read(file_desc, swap_buffer, records_length * sizeof(char)) != records_length){
+
+                    fprintf(stderr, "error occurred while reading from file\n");
+                    exit(1);
+                }
+
+                if(uninserted[0] > swap_buffer[0]) {
+
+                    if(lseek(file_desc, record_iterator, SEEK_SET) != 0) {
+
+                        fprintf(stderr, "error occurred while setting file position\n");
+                        exit(1);
+                    }
+
+                    if(write(file_desc, uninserted, records_length * sizeof(char)) != records_length){
+
+                        fprintf(stderr, "error occurred while writing into file\n");
+                        exit(1);
+                    }
+
+                    break;
+                }
+
+                else {
+
+                    if(lseek(file_desc, record_iterator, SEEK_SET) != 0) {
+
+                        fprintf(stderr, "error occurred while setting file position\n");
+                        exit(1);
+                    }
+
+                    if(write(file_desc, swap_buffer, records_length * sizeof(char)) != records_length){
+
+                        fprintf(stderr, "error occurred while writing into file\n");
+                        exit(1);
+                    }
+                }
+            }
+        }
+    }
+
+    // None of both modes was recognized
+
+    else {
+
+        fprintf(stderr, "wrong arguments format\n");
+        exit(1);
+    }
 
 }
 
