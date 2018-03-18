@@ -12,7 +12,7 @@
 void generate_random_record(char* buffer, int bytes_number) {
 
     for(int i = 0; i < bytes_number; i++)
-        buffer[i] = (char)(rand() % 95 + 33); // all ascii codes of non-white characters
+        buffer[i] = (char)(rand() % ('z' - 'a' + 1) + 'a'); // all ascii codes of non-white characters
 }
 
 // Creates file with randomly generated records
@@ -182,7 +182,7 @@ void sort(int argc, char** argv) {
 
     if(strcmp(mode, "lib") == 0) {
 
-        FILE* file = fopen(filename, "rw");
+        FILE* file = fopen(filename, "r+");
 
         if(file == NULL) {
 
@@ -194,56 +194,32 @@ void sort(int argc, char** argv) {
 
             int next_record_position = records_length * i;
 
-            if(fseek(file, next_record_position, SEEK_SET) != 0) {
+            int target_position = 0;
 
-                fprintf(stderr, "error occurred while setting file position\n");
-                exit(1);
-            }
+            fseek(file, next_record_position, SEEK_SET);
+            fread(uninserted, sizeof(char), records_length, file);
 
-            if(fread(uninserted, sizeof(char), records_length, file) != records_length){
+            printf("%d: %s\n", i, uninserted);
 
-                fprintf(stderr, "error occurred while reading from file\n");
-                exit(1);
-            }
+            for(int j = i; j > 0; j--) {
 
-            for(int record_iterator = next_record_position; record_iterator > 0; record_iterator -= records_length) {
+                int record_iterator = records_length * j;
 
-                if(fseek(file, record_iterator - records_length, SEEK_SET) != 0) {
+                fseek(file, record_iterator - records_length, SEEK_SET);
+                fread(swap_buffer, sizeof(char), records_length, file);
 
-                    fprintf(stderr, "error occurred while setting file position\n");
-                    exit(1);
-                }
-
-                if(fread(swap_buffer, sizeof(char), records_length, file) != records_length){
-
-                    fprintf(stderr, "error occurred while reading from file\n");
-                    exit(1);
-                }
+                printf("%s\n", swap_buffer);
 
                 if(uninserted[0] > swap_buffer[0]) {
 
-                    if(fseek(file, record_iterator, SEEK_SET) != 0) {
-
-                        fprintf(stderr, "error occurred while setting file position\n");
-                        exit(1);
-                    }
-
-                    if(fwrite(uninserted, sizeof(char), records_length, file) != records_length){
-
-                        fprintf(stderr, "error occurred while writing into file\n");
-                        exit(1);
-                    }
-
+                    // Proper position for next record is found
+                    target_position = record_iterator;
                     break;
                 }
 
                 else {
 
-                    if(fseek(file, record_iterator, SEEK_SET) != 0) {
-
-                        fprintf(stderr, "error occurred while setting file position\n");
-                        exit(1);
-                    }
+                    fseek(file, record_iterator, SEEK_SET);
 
                     if(fwrite(swap_buffer, sizeof(char), records_length, file) != records_length){
 
@@ -252,14 +228,13 @@ void sort(int argc, char** argv) {
                     }
                 }
             }
+
+            // Record is inserted into its proper position in file
+            fseek(file, target_position, SEEK_SET);
+            fwrite(uninserted, sizeof(char), records_length, file);
         }
 
-        if(fclose(file)) {
-
-            fprintf(stderr, "error occurred while closing file\n");
-            exit(1);
-        }
-
+        fclose(file);
     }
 
     else if(strcmp(mode, "sys") == 0) {
