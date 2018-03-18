@@ -204,10 +204,19 @@ void sort(int argc, char** argv) {
             // Setting file pointer to the beginning of the next record
             int next_record_position = records_length * i;
             int target_position = 0;
-            fseek(file, next_record_position * sizeof(char), SEEK_SET);
+
+            if(fseek(file, next_record_position * sizeof(char), SEEK_SET) != 0) {
+
+                fprintf(stderr, "error occurred while setting file pointer\n");
+                exit(1);
+            }
 
             // Loading next record from file into 'uninserted' array
-            fread(uninserted, sizeof(char), records_length, file);
+            if(fread(uninserted, sizeof(char), records_length, file) != records_length) {
+
+                fprintf(stderr, "error occurred while reading from file\n");
+                exit(1);
+            }
 
             // Searching for a proper position for the record
             for(int j = i; j > 0; j--) {
@@ -215,11 +224,19 @@ void sort(int argc, char** argv) {
                 int record_iterator = records_length * j;
 
                 // Loading record from file into 'swap_buffer' array to change its position in file
-                fseek(file, (record_iterator - records_length) * sizeof(char), SEEK_SET);
-                fread(swap_buffer, sizeof(char), records_length, file);
+                if(fseek(file, (record_iterator - records_length) * sizeof(char), SEEK_SET) != 0) {
+
+                    fprintf(stderr, "error occurred while setting file pointer\n");
+                    exit(1);
+                }
+                if(fread(swap_buffer, sizeof(char), records_length, file) != records_length) {
+
+                    fprintf(stderr, "error occurred while reading from file\n");
+                    exit(1);
+                }
 
                 // If proper position is found -> ends the inner loop
-                if(uninserted[0] > swap_buffer[0]) {
+                if(uninserted[0] >= swap_buffer[0]) {
 
                     target_position = record_iterator;
                     break;
@@ -228,7 +245,11 @@ void sort(int argc, char** argv) {
                 // If not -> rewrites previously read record to other place in file
                 else {
 
-                    fseek(file, record_iterator * sizeof(char), SEEK_SET);
+                    if(fseek(file, record_iterator * sizeof(char), SEEK_SET) != 0) {
+
+                        fprintf(stderr, "error occurred while setting file pointer\n");
+                        exit(1);
+                    }
 
                     if(fwrite(swap_buffer, sizeof(char), records_length, file) != records_length){
 
@@ -239,12 +260,24 @@ void sort(int argc, char** argv) {
             }
 
             // Inserting record into its proper position in file after finishing inner loop
-            fseek(file, target_position * sizeof(char), SEEK_SET);
-            fwrite(uninserted, sizeof(char), records_length, file);
+            if(fseek(file, target_position * sizeof(char), SEEK_SET) != 0) {
+
+                fprintf(stderr, "error occurred while setting file pointer\n");
+                exit(1);
+            }
+            if(fwrite(uninserted, sizeof(char), records_length, file) != records_length){
+
+                fprintf(stderr, "error occurred while writing into file\n");
+                exit(1);
+            }
         }
 
         // Closing file
-        fclose(file);
+        if(fclose(file) != 0) {
+
+            fprintf(stderr, "error occurred while closing file\n");
+            exit(1);
+        }
     }
 
     // Sorting with C system call functions
@@ -265,10 +298,18 @@ void sort(int argc, char** argv) {
             // Setting file pointer to the beginning of the next record
             int next_record_position = records_length * i;
             int target_position = 0;
-            lseek(file_desc, next_record_position * sizeof(char), SEEK_SET);
+            if(lseek(file_desc, next_record_position * sizeof(char), SEEK_SET) < 0) {
+
+                fprintf(stderr, "error occurred while setting file pointer\n");
+                exit(1);
+            }
 
             // Loading next record from file into 'uninserted' array
-            read(file_desc, uninserted, records_length * sizeof(char));
+            if(read(file_desc, uninserted, records_length * sizeof(char)) != records_length * sizeof(char)) {
+
+                fprintf(stderr, "error occurred while reading from file\n");
+                exit(1);
+            }
 
             // Searching for a proper position for the record
             for(int j = i; j > 0; j--) {
@@ -276,11 +317,19 @@ void sort(int argc, char** argv) {
                 int record_iterator = records_length * j;
 
                 // Loading record from file into 'swap_buffer' array to change its position in file
-                lseek(file_desc, (record_iterator - records_length) * sizeof(char), SEEK_SET);
-                read(file_desc, swap_buffer, records_length * sizeof(char));
+                if(lseek(file_desc, (record_iterator - records_length) * sizeof(char), SEEK_SET) < 0) {
+
+                    fprintf(stderr, "error occurred while setting file pointer\n");
+                    exit(1);
+                }
+                if(read(file_desc, swap_buffer, records_length * sizeof(char)) != records_length * sizeof(char)) {
+
+                    fprintf(stderr, "error occurred while reading from file\n");
+                    exit(1);
+                }
 
                 // If proper position is found -> ends the inner loop
-                if(uninserted[0] > swap_buffer[0]) {
+                if(uninserted[0] >= swap_buffer[0]) {
 
                     target_position = record_iterator;
                     break;
@@ -289,9 +338,12 @@ void sort(int argc, char** argv) {
                 // If not -> rewrites previously read record to other place in file
                 else {
 
-                    lseek(file_desc, record_iterator * sizeof(char), SEEK_SET);
+                    if(lseek(file_desc, record_iterator * sizeof(char), SEEK_SET) < 0) {
 
-                    if(write(file_desc, swap_buffer, records_length * sizeof(char)) != records_length){
+                        fprintf(stderr, "error occurred while setting file pointer\n");
+                        exit(1);
+                    }
+                    if(write(file_desc, swap_buffer, records_length * sizeof(char)) != records_length * sizeof(char)){
 
                         fprintf(stderr, "error occurred while writing into file\n");
                         exit(1);
@@ -300,12 +352,24 @@ void sort(int argc, char** argv) {
             }
 
             // Inserting record into its proper position in file after finishing inner loop
-            lseek(file_desc, target_position * sizeof(char), SEEK_SET);
-            write(file_desc, uninserted, records_length * sizeof(char));
+            if(lseek(file_desc, target_position * sizeof(char), SEEK_SET) < 0) {
+
+                fprintf(stderr, "error occurred while setting file pointer\n");
+                exit(1);
+            }
+            if(write(file_desc, uninserted, records_length * sizeof(char)) != records_length * sizeof(char)){
+
+                fprintf(stderr, "error occurred while writing into file\n");
+                exit(1);
+            }
         }
 
         // Closing file
-        close(file_desc);
+        if(close(file_desc) != 0) {
+
+            fprintf(stderr, "error occurred while closing file\n");
+            exit(1);
+        }
     }
 
     // None of both modes was recognized
@@ -318,9 +382,33 @@ void sort(int argc, char** argv) {
 
 }
 
+// Extracts time interval from two timeval structures
+double subtract_time(struct timeval a, struct timeval b)
+{
+    double tmp_a = ((double) a.tv_sec)  + (((double) a.tv_usec) / 1000000);
+    double tmp_b = ((double) b.tv_sec)  + (((double) b.tv_usec) / 1000000);
+    return tmp_a - tmp_b;
+}
+
+// Prints time value in proper format
+void print_time(double t)
+{
+    int minutes = (int) (t / 60);
+    double seconds = t - minutes * 60;
+    printf("%dm%.4fs\n", minutes, seconds);
+}
+
 int main(int argc, char** argv) {
 
     srand(time(NULL));
+
+    struct rusage ru_start, ru_end;
+    struct timeval sys_start, sys_end, user_start, user_end;
+    clock_t real_start, real_end;
+
+    // Measuring start time
+    real_start = clock();
+    getrusage(RUSAGE_SELF, &ru_start);
 
     if(argc == 1) {
 
@@ -348,4 +436,21 @@ int main(int argc, char** argv) {
         fprintf(stderr, "unknown command: %s\n", argv[1]);
         exit(1);
     }
+
+    // Measuring end time
+    real_end = clock();
+    getrusage(RUSAGE_SELF, &ru_end);
+
+    sys_start = ru_start.ru_stime;
+    user_start = ru_start.ru_utime;
+    sys_end = ru_end.ru_stime;
+    user_end = ru_end.ru_utime;
+
+    printf("execution time:\n");
+    printf("real\t");
+    print_time(((double) real_end - real_start) / CLOCKS_PER_SEC);
+    printf("user\t");
+    print_time(subtract_time(user_end, user_start));
+    printf("sys\t");
+    print_time(subtract_time(sys_end, sys_start));
 }
