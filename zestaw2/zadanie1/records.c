@@ -236,7 +236,7 @@ void sort(int argc, char** argv) {
                 }
 
                 // If proper position is found -> ends the inner loop
-                if(uninserted[0] >= swap_buffer[0]) {
+                if((unsigned char)uninserted[0] >= (unsigned char)swap_buffer[0]) {
 
                     target_position = record_iterator;
                     break;
@@ -329,7 +329,7 @@ void sort(int argc, char** argv) {
                 }
 
                 // If proper position is found -> ends the inner loop
-                if(uninserted[0] >= swap_buffer[0]) {
+                if((unsigned char)uninserted[0] >= (unsigned char)swap_buffer[0]) {
 
                     target_position = record_iterator;
                     break;
