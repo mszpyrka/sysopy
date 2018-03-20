@@ -1,15 +1,19 @@
+#define _XOPEN_SOURCE 500
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/time.h>
-#define __USE_XOPEN
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <ftw.h>
+
+struct tm arg_date;
+int operator_type;  // -1: '<';     0: '=';     1: '>'
 
 // Compares two tm structures (considers only years and days values)
 int compare_dates(struct tm* date_a, struct tm* date_b) {
@@ -25,19 +29,17 @@ int compare_dates(struct tm* date_a, struct tm* date_b) {
 }
 
 // Fills passed array with randomly generated values (in this case -> char values)
-void process_file(char* path_buffer, struct stat* stat_buffer, char* operator, struct tm* arg_date) {
+void process_file(const char* path_buffer, const struct stat* stat_buffer) {
 
     struct tm* stat_date;
     stat_date = localtime(&(stat_buffer -> st_mtime));
 
-    // Doesnt't process file if it doesn't satisfy the date constraint
-    if(!(   (operator[0] == '<' && compare_dates(stat_date, arg_date) < 0)
-         || (operator[0] == '=' && compare_dates(stat_date, arg_date) == 0)
-         || (operator[0] == '>' && compare_dates(stat_date, arg_date) > 0) ))
+    // Skips processing file if it doesn't satisfy the date constraint
+    if(compare_dates(stat_date, &arg_date) != operator_type)
         return;
 
-    char date_string[80];
-    strftime(date_string, 80, "%b %d %Y", localtime(&(stat_buffer -> st_mtime)));
+    char date_string[20];
+    strftime(date_string, 20, "%b %d %Y", localtime(&(stat_buffer -> st_mtime)));
 
     printf("%s\n", path_buffer);
     printf("-");
@@ -72,11 +74,11 @@ void print_time(double t)
 }
 
 // Processes all entries in gived directory (processes inner directories recursively)
-void search_dir(char* path_buffer, int* path_buffer_size, char* operator, struct tm* arg_date) {
+void search_dir(char* path_buffer, int* path_buffer_size) {
 
     // Saves index of path_buffer last character
-    int path_end_index = strlen(path_buffer) + 1;
-    path_buffer[path_end_index - 1] = '/';
+    strcat(path_buffer, "/");
+    int path_end_index = strlen(path_buffer);
 
     // Writes NULL character at the end of current path to ensure that all copying from and to buffer will work properly
     path_buffer[path_end_index] = '\0';
@@ -91,6 +93,7 @@ void search_dir(char* path_buffer, int* path_buffer_size, char* operator, struct
     DIR* current_dir;
     if ((current_dir = opendir (path_buffer)) == NULL) {
         perror("Error occurred while opening directory");
+        fprintf(stderr, "%s\n", path_buffer);
         exit (1);
     }
 
@@ -99,35 +102,53 @@ void search_dir(char* path_buffer, int* path_buffer_size, char* operator, struct
     struct stat stat_buffer;
     while((entry = readdir(current_dir)) != NULL) {
 
+        // Ignores '.' and '..' entries
         if(strcmp(entry -> d_name, ".") == 0 || strcmp(entry -> d_name, "..") == 0)
             continue;
 
+        // Creates path to entry
         strcat(path_buffer, entry -> d_name);
-        if(stat(path_buffer, &stat_buffer) < 0) {
+
+        // Saves entry's metadata to stat_buffer
+        if(lstat(path_buffer, &stat_buffer) < 0) {
             perror("Error occurred while getting file's stat");
+            fprintf(stderr, "%s\n", path_buffer);
             exit(1);
         }
 
-        if((stat_buffer.st_mode & S_IFREG) != 0)
-            process_file(path_buffer, &stat_buffer, operator, arg_date);
+        // Processes all regular files
+        if(S_ISREG(stat_buffer.st_mode))
+            process_file(path_buffer, &stat_buffer);
 
-        else if((stat_buffer.st_mode & S_IFDIR) != 0)
-            search_dir(path_buffer, path_buffer_size, operator, arg_date);
+        // Processes directories recorsuvely
+        else if(S_ISDIR(stat_buffer.st_mode))
+            search_dir(path_buffer, path_buffer_size);
 
-        //free(entry);
         path_buffer[path_end_index] = '\0';
     }
 
     // Closes directory
     if (closedir(current_dir) != 0) {
         perror("Error occurred while closing directory");
+        fprintf(stderr, "%s\n", path_buffer);
         exit (1);
     }
 }
 
+// Function intended to use as a parameter for nftw function
+int nftw_util(const char* path_buffer, const struct stat* stat_buffer, int entry_info, struct FTW* ftw_str) {
+
+    if(entry_info == FTW_F)
+        process_file(path_buffer, stat_buffer);
+
+    return 0;
+}
+
+// Prints example program usage
 void print_usage() {
 
-    printf("example usage: ./main ../zad1 '<' 'mar 19 2017'\n");
+    printf("example usage: ./main ../zad1 '<' 'mar 19 2017' custom\n");
+    printf("example usage: ./main /usr/include '=' 'january 1 2017' nftw\n");
 }
 
 int main(int argc, char** argv) {
@@ -146,14 +167,24 @@ int main(int argc, char** argv) {
     if(argv[1][0] == '/')
         strcpy(path_buffer, argv[1]);
 
+    // If not -> concats it with current working directory to make absolute path
     else {
         getcwd(path_buffer, 1000);
         strcat(path_buffer, "/");
         strcat(path_buffer, argv[1]);
     }
 
-    if(strcmp(argv[2], "<") != 0 && strcmp(argv[2], "=") != 0 && strcmp(argv[2], ">") != 0) {
+    // Parsing operator arg
+    if(strcmp(argv[2], "<") == 0)
+        operator_type = -1;
 
+    else if(strcmp(argv[2], "=") == 0)
+        operator_type = 0;
+
+    else if(strcmp(argv[2], ">") == 0)
+        operator_type = 1;
+
+    else {
         fprintf(stderr, "Wrong arguments format\n");
         print_usage();
         exit(1);
@@ -162,17 +193,17 @@ int main(int argc, char** argv) {
     int* buffer_size = malloc(sizeof(int));
     *buffer_size = 1000;
 
-    struct tm arg_date;
+    // Parsing date arg
     strptime(argv[3], "%b %d %Y", &arg_date);
 
-    if(strcmp(argv[4], "custom")) {
-
-        search_dir(path_buffer, buffer_size, argv[2], &arg_date);
+    if(strcmp(argv[4], "custom") == 0) {
+        printf("searching with custom function:\n\n");
+        search_dir(path_buffer, buffer_size);
     }
 
-    else if(strcmp(argv[4], "nftw")) {
-
-        ///TODO
+    else if(strcmp(argv[4], "nftw") == 0) {
+        printf("searching with nftw:\n\n");
+        nftw(path_buffer, nftw_util, 10, FTW_PHYS);
     }
 
     else {
