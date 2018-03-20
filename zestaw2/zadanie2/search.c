@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#define __USE_XOPEN
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,16 +11,29 @@
 #include <fcntl.h>
 #include <dirent.h>
 
+// Compares two tm structures (considers only years and days values)
+int compare_dates(struct tm* date_a, struct tm* date_b) {
+
+    if(date_a -> tm_year > date_b -> tm_year
+      || (date_a -> tm_year == date_b -> tm_year && date_a -> tm_yday > date_b -> tm_yday))
+        return 1;
+
+    if(date_a -> tm_year == date_b -> tm_year && date_a -> tm_yday == date_b -> tm_yday)
+        return 0;
+
+    return -1;
+}
+
 // Fills passed array with randomly generated values (in this case -> char values)
-void process_file(char* path_buffer, struct stat* stat_buffer, char* operator, char* date) {
+void process_file(char* path_buffer, struct stat* stat_buffer, char* operator, struct tm* arg_date) {
 
-    struct tm arg_time_tm;
-    strptime(date, "%b %d %", &arg_time_tm);
-    time_t arg_time = mktime(&arg_time_tm);
+    struct tm* stat_date;
+    stat_date = localtime(&(stat_buffer -> st_mtime));
 
-    if(!(   (operator[0] == '<' && stat_buffer -> st_mode < arg_time)
-         || (operator[0] == '=' && stat_buffer -> st_mode == arg_time)
-         || (operator[0] == '>' && stat_buffer -> st_mode > arg_time) ))
+    // Doesnt't process file if it doesn't satisfy the date constraint
+    if(!(   (operator[0] == '<' && compare_dates(stat_date, arg_date) < 0)
+         || (operator[0] == '=' && compare_dates(stat_date, arg_date) == 0)
+         || (operator[0] == '>' && compare_dates(stat_date, arg_date) > 0) ))
         return;
 
     char date_string[80];
@@ -58,7 +72,7 @@ void print_time(double t)
 }
 
 // Processes all entries in gived directory (processes inner directories recursively)
-void search_dir(char* path_buffer, int* path_buffer_size, char* operator, char* date) {
+void search_dir(char* path_buffer, int* path_buffer_size, char* operator, struct tm* arg_date) {
 
     // Saves index of path_buffer last character
     int path_end_index = strlen(path_buffer) + 1;
@@ -95,10 +109,10 @@ void search_dir(char* path_buffer, int* path_buffer_size, char* operator, char* 
         }
 
         if((stat_buffer.st_mode & S_IFREG) != 0)
-            process_file(path_buffer, &stat_buffer, operator, date);
+            process_file(path_buffer, &stat_buffer, operator, arg_date);
 
         else if((stat_buffer.st_mode & S_IFDIR) != 0)
-            search_dir(path_buffer, path_buffer_size, operator, date);
+            search_dir(path_buffer, path_buffer_size, operator, arg_date);
 
         //free(entry);
         path_buffer[path_end_index] = '\0';
@@ -111,13 +125,17 @@ void search_dir(char* path_buffer, int* path_buffer_size, char* operator, char* 
     }
 }
 
+void print_usage() {
+
+    printf("example usage: ./main ../zad1 '<' 'mar 19 2017'\n");
+}
+
 int main(int argc, char** argv) {
 
-    printf("%d\n", argc);
-
-    if(argc != 4) {
+    if(argc != 5) {
 
         fprintf(stderr, "Wrong arguments format\n");
+        print_usage();
         exit(1);
     }
 
@@ -134,16 +152,33 @@ int main(int argc, char** argv) {
         strcat(path_buffer, argv[1]);
     }
 
-    printf("XD\n");
-
     if(strcmp(argv[2], "<") != 0 && strcmp(argv[2], "=") != 0 && strcmp(argv[2], ">") != 0) {
 
         fprintf(stderr, "Wrong arguments format\n");
+        print_usage();
         exit(1);
     }
 
     int* buffer_size = malloc(sizeof(int));
     *buffer_size = 1000;
 
-    search_dir(path_buffer, buffer_size, argv[2], argv[3]);
+    struct tm arg_date;
+    strptime(argv[3], "%b %d %Y", &arg_date);
+
+    if(strcmp(argv[4], "custom")) {
+
+        search_dir(path_buffer, buffer_size, argv[2], &arg_date);
+    }
+
+    else if(strcmp(argv[4], "nftw")) {
+
+        ///TODO
+    }
+
+    else {
+
+        fprintf(stderr, "Wrong arguments format\n");
+        print_usage();
+        exit(1);
+    }
 }
