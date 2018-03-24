@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-// Fills passed array with randomly generated values (in this case -> char values)
+// Fills array with randomly generated values (in this case -> char values)
 void generate_random_record(char* buffer, int bytes_number) {
 
     for(int i = 0; i < bytes_number; i++)
@@ -48,16 +48,15 @@ void generate(int argc, char** argv) {
 
         if(fwrite(buffer, sizeof(char), records_length, file) != records_length) {
 
-                fprintf(stderr, "error occurred while writing records into file\n");
+                perror("error occurred while writing records into file\n");
                 exit(1);
         }
-
     }
 
     // Closing file
     if(fclose(file) != 0) {
 
-        fprintf(stderr, "error occurred while closing file\n");
+        perror("error occurred while closing file\n");
         exit(1);
     }
 }
@@ -89,7 +88,7 @@ void copy(int argc, char** argv) {
 
         if(input_file == NULL || output_file == NULL) {
 
-            fprintf(stderr, "error occurred while opening file\n");
+            perror("error occurred while opening file\n");
             exit(1);
         }
 
@@ -98,13 +97,13 @@ void copy(int argc, char** argv) {
 
             if(fread(buffer, sizeof(char), buffer_size, input_file) != buffer_size){
 
-                    fprintf(stderr, "error occurred while reading from file\n");
+                    perror("error occurred while reading from file\n");
                     exit(1);
             }
 
             if(fwrite(buffer, sizeof(char), buffer_size, output_file) != buffer_size){
 
-                    fprintf(stderr, "error occurred while writing into file\n");
+                    perror("error occurred while writing into file\n");
                     exit(1);
             }
         }
@@ -112,7 +111,7 @@ void copy(int argc, char** argv) {
         // Closing files
         if(fclose(input_file) != 0 || fclose(output_file) != 0) {
 
-            fprintf(stderr, "error occurred while closing file\n");
+            perror("error occurred while closing file\n");
             exit(1);
         }
 
@@ -130,7 +129,7 @@ void copy(int argc, char** argv) {
 
         if(input_fd < 0 || output_fd < 0) {
 
-            fprintf(stderr, "error occurred while opening file\n");
+            perror("error occurred while opening file\n");
             exit(1);
         }
 
@@ -139,13 +138,13 @@ void copy(int argc, char** argv) {
 
             if(read(input_fd, buffer, buffer_size * sizeof(char)) != buffer_size) {
 
-                    fprintf(stderr, "error occurred while reading from file\n");
+                    perror("error occurred while reading from file\n");
                     exit(1);
             }
 
             if(write(output_fd, buffer, buffer_size * sizeof(char)) != buffer_size) {
 
-                    fprintf(stderr, "error occurred while writing into file\n");
+                    perror("error occurred while writing into file\n");
                     exit(1);
             }
         }
@@ -153,7 +152,7 @@ void copy(int argc, char** argv) {
         // Closing files
         if(close(input_fd) < 0 || close(output_fd) < 0) {
 
-            fprintf(stderr, "error occurred while closing file\n");
+            perror("error occurred while closing file\n");
             exit(1);
         }
 
@@ -194,7 +193,7 @@ void sort(int argc, char** argv) {
 
         if(file == NULL) {
 
-            fprintf(stderr, "error occurred while opening file\n");
+            perror("error occurred while opening file\n");
             exit(1);
         }
 
@@ -207,14 +206,14 @@ void sort(int argc, char** argv) {
 
             if(fseek(file, next_record_position * sizeof(char), SEEK_SET) != 0) {
 
-                fprintf(stderr, "error occurred while setting file pointer\n");
+                perror("error occurred while setting file pointer\n");
                 exit(1);
             }
 
             // Loading next record from file into 'uninserted' array
             if(fread(uninserted, sizeof(char), records_length, file) != records_length) {
 
-                fprintf(stderr, "error occurred while reading from file\n");
+                perror("error occurred while reading from file\n");
                 exit(1);
             }
 
@@ -226,12 +225,12 @@ void sort(int argc, char** argv) {
                 // Loading record from file into 'swap_buffer' array to change its position in file
                 if(fseek(file, (record_iterator - records_length) * sizeof(char), SEEK_SET) != 0) {
 
-                    fprintf(stderr, "error occurred while setting file pointer\n");
+                    perror("error occurred while setting file pointer\n");
                     exit(1);
                 }
                 if(fread(swap_buffer, sizeof(char), records_length, file) != records_length) {
 
-                    fprintf(stderr, "error occurred while reading from file\n");
+                    perror("error occurred while reading from file\n");
                     exit(1);
                 }
 
@@ -247,13 +246,13 @@ void sort(int argc, char** argv) {
 
                     if(fseek(file, record_iterator * sizeof(char), SEEK_SET) != 0) {
 
-                        fprintf(stderr, "error occurred while setting file pointer\n");
+                        perror("error occurred while setting file pointer\n");
                         exit(1);
                     }
 
                     if(fwrite(swap_buffer, sizeof(char), records_length, file) != records_length){
 
-                        fprintf(stderr, "error occurred while writing into file\n");
+                        perror("error occurred while writing into file\n");
                         exit(1);
                     }
                 }
@@ -262,12 +261,12 @@ void sort(int argc, char** argv) {
             // Inserting record into its proper position in file after finishing inner loop
             if(fseek(file, target_position * sizeof(char), SEEK_SET) != 0) {
 
-                fprintf(stderr, "error occurred while setting file pointer\n");
+                perror("error occurred while setting file pointer\n");
                 exit(1);
             }
             if(fwrite(uninserted, sizeof(char), records_length, file) != records_length){
 
-                fprintf(stderr, "error occurred while writing into file\n");
+                perror("error occurred while writing into file\n");
                 exit(1);
             }
         }
@@ -275,7 +274,7 @@ void sort(int argc, char** argv) {
         // Closing file
         if(fclose(file) != 0) {
 
-            fprintf(stderr, "error occurred while closing file\n");
+            perror("error occurred while closing file\n");
             exit(1);
         }
     }
@@ -288,7 +287,7 @@ void sort(int argc, char** argv) {
 
         if(file_desc < 0) {
 
-            fprintf(stderr, "error occurred while opening file\n");
+            perror("error occurred while opening file\n");
             exit(1);
         }
 
@@ -300,14 +299,14 @@ void sort(int argc, char** argv) {
             int target_position = 0;
             if(lseek(file_desc, next_record_position * sizeof(char), SEEK_SET) < 0) {
 
-                fprintf(stderr, "error occurred while setting file pointer\n");
+                perror("error occurred while setting file pointer\n");
                 exit(1);
             }
 
             // Loading next record from file into 'uninserted' array
             if(read(file_desc, uninserted, records_length * sizeof(char)) != records_length * sizeof(char)) {
 
-                fprintf(stderr, "error occurred while reading from file\n");
+                perror("error occurred while reading from file\n");
                 exit(1);
             }
 
@@ -319,12 +318,12 @@ void sort(int argc, char** argv) {
                 // Loading record from file into 'swap_buffer' array to change its position in file
                 if(lseek(file_desc, (record_iterator - records_length) * sizeof(char), SEEK_SET) < 0) {
 
-                    fprintf(stderr, "error occurred while setting file pointer\n");
+                    perror("error occurred while setting file pointer\n");
                     exit(1);
                 }
                 if(read(file_desc, swap_buffer, records_length * sizeof(char)) != records_length * sizeof(char)) {
 
-                    fprintf(stderr, "error occurred while reading from file\n");
+                    perror("error occurred while reading from file\n");
                     exit(1);
                 }
 
@@ -340,12 +339,12 @@ void sort(int argc, char** argv) {
 
                     if(lseek(file_desc, record_iterator * sizeof(char), SEEK_SET) < 0) {
 
-                        fprintf(stderr, "error occurred while setting file pointer\n");
+                        perror("error occurred while setting file pointer\n");
                         exit(1);
                     }
                     if(write(file_desc, swap_buffer, records_length * sizeof(char)) != records_length * sizeof(char)){
 
-                        fprintf(stderr, "error occurred while writing into file\n");
+                        perror("error occurred while writing into file\n");
                         exit(1);
                     }
                 }
@@ -354,12 +353,12 @@ void sort(int argc, char** argv) {
             // Inserting record into its proper position in file after finishing inner loop
             if(lseek(file_desc, target_position * sizeof(char), SEEK_SET) < 0) {
 
-                fprintf(stderr, "error occurred while setting file pointer\n");
+                perror("error occurred while setting file pointer\n");
                 exit(1);
             }
             if(write(file_desc, uninserted, records_length * sizeof(char)) != records_length * sizeof(char)){
 
-                fprintf(stderr, "error occurred while writing into file\n");
+                perror("error occurred while writing into file\n");
                 exit(1);
             }
         }
@@ -367,7 +366,7 @@ void sort(int argc, char** argv) {
         // Closing file
         if(close(file_desc) != 0) {
 
-            fprintf(stderr, "error occurred while closing file\n");
+            perror("error occurred while closing file\n");
             exit(1);
         }
     }
