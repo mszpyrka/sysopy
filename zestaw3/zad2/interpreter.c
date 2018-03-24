@@ -91,7 +91,7 @@ void process_next_line(char* buffer) {
 
     if(WIFSIGNALED(exec_status)) {
 
-        fprintf(stderr, "Command '%s' in line %d: process terminated by signal: %d", command, line_counter, WTERMSIG(exec_status));
+        fprintf(stderr, "Command '%s' in line %d: process terminated by signal: %d\n", command, line_counter, WTERMSIG(exec_status));
         exit(1);
     }
 }
