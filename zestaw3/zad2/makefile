@@ -1,7 +1,8 @@
 GCC_FLAGS = -Wall
+SOURCE = interpreter.c
 
-main: batch_interpreter.c
-	gcc $(GCC_FLAGS) batch_interpreter.c -o main
+main: $(SOURCE)
+	gcc $(GCC_FLAGS) $(SOURCE) -o main
 
 
 
