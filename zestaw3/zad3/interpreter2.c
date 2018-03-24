@@ -89,6 +89,7 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
     }
 
     struct rusage ru_start, ru_end;
+    struct timeval sys_start, sys_end, user_start, user_end;
 
     if(getrusage(RUSAGE_CHILDREN, &ru_start) < 0) {
 
@@ -128,7 +129,11 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
 
     if(WIFSIGNALED(exec_status)) {
 
+        fprintf(stderr, ANSI_COLOR_RED);
         fprintf(stderr, "Failed to run command '%s' in line %d: process terminated by signal: %d\n", command, line_counter, WTERMSIG(exec_status));
+        fprintf(stderr, ANSI_COLOR_RESET);
+        fflush(stdout);
+
         exit(1);
     }
 
@@ -138,7 +143,6 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
         exit(1);
     }
 
-    struct timeval sys_start, sys_end, user_start, user_end;
     sys_start = ru_start.ru_stime;
     user_start = ru_start.ru_utime;
     sys_end = ru_end.ru_stime;
@@ -150,8 +154,6 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
     print_time(subtract_time(user_end, user_start));
     printf("sys time:\t");
     print_time(subtract_time(sys_end, sys_start));
-    printf("mem:\t");
-    printf("\n");/// TODO - memory usage calculating (???)
     printf(ANSI_COLOR_RESET);
     fflush(stdout);
 
