@@ -112,7 +112,7 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
 
         if(execvp(command, args) == -1) {
 
-            fprintf(stderr, "Failed to run command '%s' in line %d: ", command, line_counter);
+            fprintf(stderr, "Failed to run command '%s' in line %d: ", args[0], line_counter);
             perror("");
             exit(1);
         }
@@ -123,14 +123,14 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
 
     if(WIFEXITED(exec_status) && WEXITSTATUS(exec_status) != 0) {
 
-        fprintf(stderr, "Command '%s' in line %d: process exited with status: %d\n", command, line_counter, WEXITSTATUS(exec_status));
+        fprintf(stderr, "Command '%s' in line %d: process exited with status: %d\n", args[0], line_counter, WEXITSTATUS(exec_status));
         exit(1);
     }
 
     if(WIFSIGNALED(exec_status)) {
 
         fprintf(stderr, ANSI_COLOR_RED);
-        fprintf(stderr, "Failed to run command '%s' in line %d: process terminated by signal: %d\n", command, line_counter, WTERMSIG(exec_status));
+        fprintf(stderr, "Failed to run command '%s' in line %d: process terminated by signal: %d\n", args[0], line_counter, WTERMSIG(exec_status));
         fprintf(stderr, ANSI_COLOR_RESET);
         fflush(stdout);
 
@@ -149,7 +149,7 @@ void process_next_line(char* buffer, struct rlimit* cpu_limit, struct rlimit* me
     user_end = ru_end.ru_utime;
 
     printf(ANSI_COLOR_GREEN);
-    printf("Command '%s' in line %d - resource usage:\n", command, line_counter);
+    printf("Command '%s' in line %d - resource usage:\n", args[0], line_counter);
     printf("usr time:\t");
     print_time(subtract_time(user_end, user_start));
     printf("sys time:\t");
