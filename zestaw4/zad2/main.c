@@ -47,7 +47,9 @@ struct exit_code *exit_codes;
 // Program parameters (number of children and number of requests to receive before sending approvals)
 int children_number;
 int requests_threshold;
-int requests_bottom_limit;
+
+// Denotes whether all created child processes have finished their execution
+int all_children_finished;
 
 
 
@@ -74,9 +76,41 @@ void child_proc_fun(int seed) {
     request_approved = 0;
 
     // Ignores interrupt signal in order not to end the process in case of interactive terminal interrupt
-    signal(SIGINT, SIG_IGN);
-    signal(SIGUSR2, ch_sig_usr2);
-    signal(SIGQUIT, ch_sig_quit);
+    // struct sigaction setup
+    struct sigaction act_int;
+    act_int.sa_handler = SIG_IGN;
+    sigemptyset(&act_int.sa_mask);
+
+    // Setting handler for SIGINT
+    if(sigaction(SIGINT, &act_int, NULL) == -1) {
+
+        perror("Cannot set SIGINT signal handler for child process");
+        exit(20);
+    }
+
+    // struct sigaction setup
+    struct sigaction act_usr2;
+    act_usr2.sa_handler = ch_sig_usr2;
+    sigemptyset(&act_usr2.sa_mask);
+
+    // Setting handler for SIGUSR2
+    if(sigaction(SIGUSR2, &act_usr2, NULL) == -1) {
+
+        perror("Cannot set SIGUSR2 signal handler for child process");
+        exit(20);
+    }
+
+    // struct sigaction setup
+    struct sigaction act_quit;
+    act_quit.sa_handler = ch_sig_quit;
+    sigemptyset(&act_quit.sa_mask);
+
+    // Setting handler for SIGUSR2
+    if(sigaction(SIGQUIT, &act_quit, NULL) == -1) {
+
+        perror("Cannot set SIGQUIT signal handler for child process");
+        exit(20);
+    }
 
     srand(seed);
     int sleep_time = rand() % 11; // Randomly chooses number between 0 and 10
@@ -85,6 +119,14 @@ void child_proc_fun(int seed) {
 
     union sigval none;
 
+    sigset_t usr2_mask, old_mask;
+    sigemptyset(&usr2_mask);
+    sigaddset(&usr2_mask, SIGUSR2);
+
+    // Blocks SIGUSR2 for critical part of code
+    sigprocmask(SIG_BLOCK, &usr2_mask, &old_mask);
+
+    // Sends request to parent process
     if(sigqueue(getppid(), SIGUSR1, none) == -1) {
 
         fprintf(stderr, "Could not send SIGUSR1 signal to parent process %d", getppid());
@@ -92,8 +134,14 @@ void child_proc_fun(int seed) {
         exit(20);
     }
 
+    fprintf(stderr, "ja, %d, wyslalem sygnal do taty %d\n", getpid(), getppid());
+
+    // Unblocks SIGUSR2
     while(request_approved == 0)
-        pause();
+        sigsuspend(&old_mask);
+
+    // Restores old sigmask
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
 
     // Sends random real-time signal to parent process
     int rand_sig = SIGRTMIN + rand() % (SIGRTMAX - SIGRTMIN + 1);
@@ -102,7 +150,7 @@ void child_proc_fun(int seed) {
 
         fprintf(stderr, "Could not send SIGRT signal to parent process %d", getppid());
         perror("");
-        exit(21);
+        exit(20);
     }
 
     exit(sleep_time);
@@ -118,7 +166,7 @@ void create_child() {
     pid_t id = fork();
 
     if(id == 0)
-        child_proc_fun(created_it); // created_it is sent as rand seed to child_proc_fun in order to guarantee different seeds across all children
+        child_proc_fun(getpid()); // new pid is sent as rand seed to child_proc_fun in order to guarantee different seeds across all children
 
     created_processes[created_it] = id;
     created_it++;
@@ -162,9 +210,9 @@ void sig_int(int signo) {
 }
 
 
-// Function used for handling SIGCHLD (makes use of siginfo structure, should be installed via sigaction with SA_SIGINFO flag enabled)
-// Also this handler assumes that it is being called only after child process termination, thus should be installed with SA_NOCHLDSTOP flag
-void sig_chld(int signo, siginfo_t *info, void *ucontext) {
+// Function used for handling SIGCHLD
+// This handler assumes that it is being called only after child process termination, thus should be installed with SA_NOCHLDSTOP flag
+void sig_chld(int signo) {
 
     int status;
     int child_id;
@@ -178,7 +226,7 @@ void sig_chld(int signo, siginfo_t *info, void *ucontext) {
 
     // Exits if all children have finished their processes and all signals have beed processed successfully
     if(exit_it == children_number)
-        exit(0);
+        all_children_finished = 1;
 }
 
 
@@ -231,7 +279,9 @@ int main(int argc, char** argv) {
     }
 
     children_number = atoi(argv[1]);
-    requests_bottom_limit = atoi(argv[2]);
+    requests_threshold = atoi(argv[2]);
+
+    all_children_finished = 0;
 
     // Allocating memory for arrays storing tracked data
 
@@ -272,9 +322,9 @@ int main(int argc, char** argv) {
 
     // struct sigaction setup
     struct sigaction act_chld;
-    act_chld.sa_sigaction = sig_chld;
+    act_chld.sa_handler = sig_chld;
     sigemptyset(&act_chld.sa_mask);
-    act_chld.sa_flags = SA_NOCLDSTOP | SA_SIGINFO;
+    act_chld.sa_flags = SA_NOCLDSTOP;
 
     // Setting handler for SIGCHLD
     if(sigaction(SIGCHLD, &act_chld, NULL) == -1) {
@@ -286,7 +336,8 @@ int main(int argc, char** argv) {
     // struct sigaction setup
     struct sigaction act_usr1;
     act_usr1.sa_sigaction = sig_usr1;
-    sigemptyset(&act_usr1.sa_mask);
+    sigemptyset(&(act_usr1.sa_mask));
+    sigaddset(&(act_usr1.sa_mask), SIGUSR1);
     act_usr1.sa_flags = SA_SIGINFO;
 
     // Setting handler for SIGUSR1
@@ -318,11 +369,64 @@ int main(int argc, char** argv) {
 
     printf("handlers setup completed\n");
 
-    for(int i = 0; i < children_number; i++) {
+    sigset_t chld_mask, old_mask;
+    sigemptyset(&chld_mask);
+    sigaddset(&chld_mask, SIGCHLD);
 
+    sigprocmask(SIG_BLOCK, &chld_mask, &old_mask);
+
+    for(int i = 0; i < children_number; i++)
         create_child();
+
+    while(all_children_finished == 0)
+        sigsuspend(&old_mask);
+
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
+
+    if(track_created == 1) {
+
+        printf("created processes:\n");
+        for(int i = 0; i < created_it; i++)
+            printf("%d\n", created_processes[i]);
+
+        printf("\n");
     }
 
-    while(1)
-        pause();
+    if(track_requests == 1) {
+
+        printf("received requests children ids:\n");
+        for(int i = 0; i < requests_it; i++)
+            printf("%d\n", received_requests[i]);
+
+        printf("\n");
+    }
+
+    if(track_approvals == 1) {
+
+        printf("sent approvals children ids:\n");
+        for(int i = 0; i < approvals_it; i++)
+            printf("%d\n", sent_approvals[i]);
+
+        printf("\n");
+    }
+
+    if(track_rtsignals == 1) {
+
+        printf("received real-time signals:\n");
+        printf("pid\tsigno\n");
+        for(int i = 0; i < received_it; i++)
+            printf("%d\t%d\n", received_rtsignals[i].pid, received_rtsignals[i].signal);
+
+        printf("\n");
+    }
+
+    if(track_exit_codes == 1) {
+
+        printf("children processes exit codes:\n");
+        printf("pid\texit_code\n");
+        for(int i = 0; i < exit_it; i++)
+            printf("%d\t%d\n", exit_codes[i].pid, exit_codes[i].code);
+
+        printf("\n");
+    }
 }
