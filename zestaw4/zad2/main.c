@@ -22,10 +22,10 @@
 #define RESET       "\x1B[0m"
 
 // Options defining which values the main program should track during the execution
-int track_created = 0;
-int track_requests = 0;
-int track_approvals = 0;
-int track_rtsignals = 0;
+int track_created = 1;
+int track_requests = 1;
+int track_approvals = 1;
+int track_rtsignals = 1;
 int track_exit_codes = 1;
 
 // Structure storing information about signals received from children precesses
