@@ -12,6 +12,8 @@
 pid_t child_proc_id;
 const char *name;
 
+int main_loop_active;
+
 
 // Forks and executes passed script in child process
 void execute_script() {
@@ -25,6 +27,7 @@ void execute_script() {
         child_proc_id = pid;
 
     else {
+        // Ignores both signals that would be sent to process from shell if user typed keyboard signal keys
         signal(SIGINT, SIG_IGN);
         signal(SIGTSTP, SIG_IGN);
 
@@ -36,33 +39,12 @@ void execute_script() {
 }
 
 
-// Ends child process, returns 0 on success, -1 if there were no children processes
-int end_child_process() {
-
-    if(child_proc_id == -1)
-        return -1;
-
-    pid_t info = waitpid(child_proc_id, NULL, WNOHANG);
-
-
-    if(info == 0) {    // When child process is executing
-
-        kill(child_proc_id, SIGKILL);
-
-        child_proc_id = -1;
-        return 0;
-    }
-
-    // When there are no children processes
-    child_proc_id = -1;
-    return -1;
-}
-
-
 // Function used for handling SIGINT
 void sig_int(int signo) {
 
-    end_child_process();
+    if(main_loop_active == 1)
+        kill(child_proc_id, SIGKILL);
+
     printf("Odebrano sygnal SIGINT\n");
     exit(0);
 }
@@ -71,14 +53,22 @@ void sig_int(int signo) {
 // Function used for handling SIGTSTP
 void sig_tstp(int signo) {
 
-    if(end_child_process() == 0) {
-
-        printf("Oczekuje na CTRL+Z - kontynuacja albo CTRL+C - zakonczenie programu\n");
-        fflush(stdout);
+    // In case handler was called from previous call to this handler
+    if(main_loop_active == 0) {
+        main_loop_active = 1;
+        return;
     }
 
-    else
-        execute_script();
+    // In case handler was called while processing main loop
+    kill(child_proc_id, SIGKILL);
+    main_loop_active = 0;
+    fprintf(stdout, "Oczekuje na CTRL+Z - kontynuacja albo CTRL+C - zakonczenie programu\n");
+
+    sigset_t wait_mask;
+    sigfillset(&wait_mask);
+    sigdelset(&wait_mask, SIGINT);
+    sigdelset(&wait_mask, SIGTSTP);
+    sigsuspend(&wait_mask); // Pauses until SIGTSTP or SIGINT occurs
 }
 
 
@@ -118,21 +108,10 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    // struct sigaction setup
-    struct sigaction act_chld;
-    act_chld.sa_handler = SIG_DFL;
-    sigemptyset(&act_chld.sa_mask);
-    act_chld.sa_flags = SA_NOCLDWAIT;
+    main_loop_active = 1;
 
-    // Setting handler for SIGTSTP
-    if(sigaction(SIGCHLD, &act_chld, NULL) == -1) {
-
-        perror("Cannot set SIGCHLD signal handler");
-        exit(1);
-    }
-
-    execute_script();
-
-    while(1)
+    while(1) {
+        execute_script();
         pause();
+    }
 }
