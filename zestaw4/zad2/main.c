@@ -90,8 +90,20 @@ void ch_sig_quit(int signo) {
 // Function executed by every child process
 void child_proc_fun(int seed) {
 
-    request_approved = 0;
+    sigset_t child_proc_mask;
+    sigfillset(&child_proc_mask);
+    sigdelset(&child_proc_mask, SIGQUIT);
+    sigdelset(&child_proc_mask, SIGUSR2);
 
+    // Sets initial sigmask
+    if(sigprocmask(SIG_SETMASK, &child_proc_mask, NULL) == -1) {
+
+        fprintf(stderr, "Could not set sigmask in child process %d", getpid());
+        perror("");
+        exit(20);
+    }
+
+    // Handlers block all signals except SIGQUIT
     struct sigaction s_act;
     sigfillset(&s_act.sa_mask);
     sigdelset(&s_act.sa_mask, SIGQUIT);
@@ -151,12 +163,11 @@ void child_proc_fun(int seed) {
     if(track_requests == 1)
         fprintf(stdout, YELLOW "child %d: successfully sent REQUEST_SIGNAL to parent process %d\n" RESET, getpid(), getppid());
 
+    request_approved = 0;
+
     // Unblocks REQUEST_SIGNAL
     while(request_approved == 0)
         sigsuspend(&old_mask);
-
-    // Restores old sigmask
-    sigprocmask(SIG_SETMASK, &old_mask, NULL);
 
     // Sends random real-time signal (excluding SIGRTMAX) to parent process
     int rand_sig = SIGRTMIN + rand() % (SIGRTMAX - SIGRTMIN);
@@ -190,7 +201,7 @@ void create_child() {
     created_it++;
 
     if(track_created == 1)
-        fprintf(stdout, GREEN "parent: creating child process %d\n" RESET, id);
+        fprintf(stdout, GREEN "parent: created child process %d\n" RESET, id);
 }
 
 
@@ -216,7 +227,7 @@ void send_single_approval(pid_t child_pid) {
         sent_approvals[approvals_it] = child_pid;
         approvals_it++;
 
-        fprintf(stdout, CYAN "parent: sending request approval to child process %d\n" RESET, child_pid);
+        fprintf(stdout, CYAN "parent: sent request approval to child process %d\n" RESET, child_pid);
     }
 }
 
@@ -224,7 +235,7 @@ void send_single_approval(pid_t child_pid) {
 // Function used for handling SIGINT
 void sig_int(int signo) {
 
-    printf("Received signal SIGINT\n");
+    fprintf(stdout, RED "Received signal SIGINT\n" RESET);
 
     for(int i = 0; i < created_it; i++)
         kill_child(created_processes[i]);
@@ -240,7 +251,7 @@ void sig_chld(int signo) {
     int status;
     int child_id;
 
-    // Saves info about process that sent the signal
+    // Saves info about processes that sent the signal
     while((child_id = waitpid(-1, &status, WNOHANG)) > 0) {
         exit_codes[exit_it].pid = child_id;
         exit_codes[exit_it].code = WEXITSTATUS(status);
@@ -338,85 +349,72 @@ int main(int argc, char** argv) {
     exit_it = 0;
 
     // struct sigaction setup
-    struct sigaction act_int;
-    act_int.sa_handler = sig_int;
-    sigfillset(&act_int.sa_mask);
+    struct sigaction s_act;
+    s_act.sa_handler = sig_int;
+    sigfillset(&s_act.sa_mask);
 
     // Setting handler for SIGINT
-    if(sigaction(SIGINT, &act_int, NULL) == -1) {
+    if(sigaction(SIGINT, &s_act, NULL) == -1) {
 
         perror("Cannot set SIGINT signal handler");
         exit(1);
     }
 
-    // struct sigaction setup
-    struct sigaction act_chld;
-    act_chld.sa_handler = sig_chld;
-    sigfillset(&act_chld.sa_mask);
-    sigdelset(&act_chld.sa_mask, SIGINT);
-    act_chld.sa_flags = SA_NOCLDSTOP;
+    // struct sigaction setup (blocks all signals except SIGINT, uses SA_NOCLDSTOP flag)
+    s_act.sa_handler = sig_chld;
+    sigdelset(&s_act.sa_mask, SIGINT);
+    s_act.sa_flags = SA_NOCLDSTOP;
 
     // Setting handler for SIGCHLD
-    if(sigaction(SIGCHLD, &act_chld, NULL) == -1) {
+    if(sigaction(SIGCHLD, &s_act, NULL) == -1) {
 
         perror("Cannot set SIGCHLD signal handler");
         exit(1);
     }
 
-    // struct sigaction setup
-    struct sigaction act_usr1;
-    act_usr1.sa_sigaction = sig_req;
-    sigfillset(&(act_usr1.sa_mask));
-    sigdelset(&act_usr1.sa_mask, SIGINT);
-    act_usr1.sa_flags = SA_SIGINFO;
+    // struct sigaction setup (blocks all signals except SIGINT, uses SA_SIGINFO flag)
+    s_act.sa_sigaction = sig_req;
+    s_act.sa_flags = SA_SIGINFO;
 
     // Setting handler for REQUEST_SIGNAL
-    if(sigaction(REQUEST_SIGNAL, &act_usr1, NULL) == -1) {
+    if(sigaction(REQUEST_SIGNAL, &s_act, NULL) == -1) {
 
         perror("Cannot set SIGUSR1 signal handler");
         exit(1);
     }
 
 
-    // struct sigaction setup
-    struct sigaction act_rt;
-    act_rt.sa_sigaction = sig_rt;
+    // struct sigaction setup (blocks all signals except SIGINT, uses SA_SIGINFO flag)
+    s_act.sa_sigaction = sig_rt;
+    s_act.sa_flags = SA_SIGINFO;
 
-    // Adding all RT signals blocking to handler's mask
-    sigfillset(&(act_rt.sa_mask));
-    sigdelset(&act_rt.sa_mask, SIGINT);
-
-    act_rt.sa_flags = SA_SIGINFO;
-
-    // Setting handler for SIGRT
+    // Setting handler for all SIGRT signals (except for SIGRTMAX)
     for(int i = SIGRTMIN; i < SIGRTMAX; i++)
-        if(sigaction(i, &act_rt, NULL) == -1) {
+        if(sigaction(i, &s_act, NULL) == -1) {
 
             perror("Cannot set SIGRT signal handler");
             exit(1);
         }
 
-    printf("handlers setup completed\n");
+    fprintf(stdout, "handlers setup completed\n");
 
     sigset_t chld_mask, old_mask;
-    sigemptyset(&chld_mask);
-    sigaddset(&chld_mask, SIGCHLD);
-    sigaddset(&chld_mask, REQUEST_SIGNAL);
+    sigfillset(&chld_mask);
+    sigdelset(&chld_mask, SIGINT);
 
-    sigprocmask(SIG_BLOCK, &chld_mask, &old_mask);
+    if(sigprocmask(SIG_BLOCK, &chld_mask, &old_mask) == -1) {
+
+        perror("Could not restore previous sigmask");
+        exit(1);
+    }
 
     for(int i = 0; i < children_number; i++)
         create_child();
 
-    while(all_children_finished == 0) {
+    // Main loop of program execution
+    while(all_children_finished == 0)
         sigsuspend(&old_mask);
-        //send_approvals();
-    }
 
-    sigprocmask(SIG_SETMASK, &old_mask, NULL);
-
-    if(all_children_finished == -1)
-        fprintf(stderr, "execution interrupted with signal SIGINT\n");
 
     if(track_created == 1) {
 
