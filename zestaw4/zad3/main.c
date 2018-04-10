@@ -22,11 +22,10 @@ int responded;              // Flag to check if parent process received the chil
 // ============================================================================================================================================
 
 
-// Function used for handling trigger signals
+// Function used for handling trigger signals in child process
 void ch_sig_trigger(int signo) {
 
     ch_received_signals++;
-
     kill(getppid(), RESPONSE_SIGNAL);
 }
 
@@ -45,7 +44,6 @@ void sig_int(int signo) {
     printf("Received signal SIGINT\n");
 
     kill(child_pid, TERMINATION_SIGNAL);
-
 
     fprintf(stdout, "parent process: sent %d trigger signals to child\n", sent_trigger_signals);
     fprintf(stdout, "parent process: received %d response signals from child\n", received_response_signals);
@@ -126,6 +124,7 @@ void child_proc_fun() {
     ch_received_signals = 0;
     set_child_handlers();
 
+    // Unblocks TRIGGER_SIGNAL and TERMINATION_SIGNAL
     sigset_t child_mask;
     sigfillset(&child_mask);
     sigdelset(&child_mask, TRIGGER_SIGNAL);
@@ -142,11 +141,10 @@ void create_child() {
     sigset_t child_mask, parent_mask;
     sigfillset(&child_mask);
 
-    // Sets sigmask for child process (blocks all signals except TERMINATION_SIGNAL and TRIGGER_SIGNAL)
+    // Sets sigmask for child process (initially blocks all signals)
     if(sigprocmask(SIG_SETMASK, &child_mask, &parent_mask) == -1) {
 
-        fprintf(stderr, "Could not set sigmask");
-        perror("");
+        perror("Could not set sigmask");
         exit(1);
     }
 
@@ -159,8 +157,7 @@ void create_child() {
 
     if(sigprocmask(SIG_SETMASK, &parent_mask, NULL) == -1) {
 
-        fprintf(stderr, "Could not restore previous sigmask");
-        perror("");
+        perror("Could not restore previous sigmask");
         exit(1);
     }
 }
@@ -213,11 +210,11 @@ int main(int argc, char** argv) {
 
         sigset_t response_mask, prev_mask;
         sigemptyset(&response_mask);
+        sigaddset(&response_mask, RESPONSE_SIGNAL);
 
         if(sigprocmask(SIG_BLOCK, &response_mask, &prev_mask) == -1) {
 
-            fprintf(stderr, "Could not restore response_mask sigmask");
-            perror("");
+            perror("Could not set sigmas");
             exit(1);
         }
 
@@ -226,11 +223,10 @@ int main(int argc, char** argv) {
             responded = 0;
 
             kill(child_pid, TRIGGER_SIGNAL);
+            sent_trigger_signals++;
 
             while(responded == 0)
                 sigsuspend(&prev_mask);
-
-            sent_trigger_signals++;
         }
 
         kill(child_pid, TERMINATION_SIGNAL);
