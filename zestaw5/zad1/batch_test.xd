@@ -1,0 +1,4 @@
+pwd
+ls -l | grep main
+ps -aux | grep -w root | awk '{print $2}' | sort -n | head -5
+ls -l | sort -r | head -3 | grep main | sleep 100
