@@ -23,8 +23,13 @@ static void exit_fun() {
 
     for(int i = 0; i < child_pid_iter; i++) {
 
-        if(waitpid(child_pid_array[i], NULL, WNOHANG) == 0)
-            kill(child_pid_array[i], SIGINT);
+        if(waitpid(child_pid_array[i], NULL, WNOHANG) == 0) {
+            if(kill(child_pid_array[i], SIGKILL) == -1) {
+                fprintf(stderr, "Error: Cannot send SIGINT to process %d", child_pid_array[i]);
+                perror("");
+                _exit(2);
+            }
+        }
     }
 }
 
@@ -47,14 +52,12 @@ int pipe_exec(const char *command, int input_fd, int *child_pid, int WRITE_STDOU
 
         if(input_fd != STDIN_FILENO) {
 
-            //fprintf(stdout, "XDD\n");
             dup2(input_fd, STDIN_FILENO);
             close(input_fd);
         }
 
         if((WRITE_STDOUT == 0) && (pipe_fd[1] != STDOUT_FILENO)) {
 
-            //fprintf(stdout, "XDD\n");
             dup2(pipe_fd[1], STDOUT_FILENO);
             close(pipe_fd[1]);
         }
@@ -72,6 +75,9 @@ int pipe_exec(const char *command, int input_fd, int *child_pid, int WRITE_STDOU
 }
 
 int is_empty(const char* line) {
+
+    if(line[0] == '\0')
+        return 1;
 
     int i = 0;
     while(line[i] != '\0') {
@@ -113,6 +119,12 @@ void process_next_line(char *command) {
         }
 
         i++;
+    }
+
+    if(is_empty(command + command_pointers[command_iter-1]) == 1) {
+
+        fprintf(stderr, RED "Error: line %d - incorrect syntax\n" RESET, line_counter);
+        exit(1);
     }
 
     child_pid_iter = 0;
