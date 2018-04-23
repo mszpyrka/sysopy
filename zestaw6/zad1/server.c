@@ -13,11 +13,16 @@
 #include <sys/msg.h>
 #include "server_info.h"
 
-key_t client_queue_id[SI_CLIENTS_LIMIT];
 int server_queue_id;
+int end_request_received;
 
-int client_pid[SI_CLIENTS_LIMIT];
+struct client {
+    int pid;
+    int queue_id;
+    int id;
+};
 
+struct client clients[SI_CLIENTS_LIMIT];
 
 struct string_message {
 
@@ -26,6 +31,34 @@ struct string_message {
 };
 
 
+// Sends message to given queue
+int send_string_message(int client_pid, long type, const char *message) {
+
+    int client_slot;
+    for(client_slot = 0; client_slot < SI_CLIENTS_LIMIT; client_slot++)
+        if(clients[client_slot].pid == client_pid)
+            break;
+
+    if(client_slot == SI_CLIENTS_LIMIT)
+        return -1;
+
+    struct string_message msg;
+    msg.type = type;
+    strcpy(msg.message, message);
+
+    if(msgsnd(clients[client_slot].queue_id, &msg, SI_MESSAGE_MAX_SIZE, 0) == -1) {
+        fprintf(stderr, "Could not successfully send message \"%s\": ", message);
+        perror("");
+    }
+
+    return 0;
+}
+
+
+// ==================================================================================================
+// ALL TASKS PERFORMED BY SERVER
+// ==================================================================================================
+
 // Processes string that contains CALC request message
 int calc_task(char *task, char *ans) {
 
@@ -33,11 +66,11 @@ int calc_task(char *task, char *ans) {
     char *token_ptr;
     char *tokens[3];
 
-    token_ptr = strtok(task, " \t");
-    int client_id = atoi(token_ptr);
+    token_ptr = strtok(task, " \t\n");
+    int client_pid = atoi(token_ptr);
 
     for(int i = 0; i < 3; i++) {
-        token_ptr = strtok(NULL, " \t");
+        token_ptr = strtok(NULL, " \t\n");
 
         if(token_ptr == NULL)
             return -1;
@@ -68,19 +101,19 @@ int calc_task(char *task, char *ans) {
         return -1;
 
     sprintf(ans, "%d", result);
-    return client_id;
+    return client_pid;
 }
 
 
 // Processes string that contains MIRROR request message
 int mirror_task(char *task, char *ans) {
 
-    char *token_ptr = strtok(task, " \t");
+    char *token_ptr = strtok(task, " \t\n");
 
     if(token_ptr == NULL)
         return -1;
 
-    int client_id = atoi(token_ptr);
+    int client_pid = atoi(token_ptr);
 
     token_ptr = strtok(NULL, "\0");
 
@@ -92,31 +125,91 @@ int mirror_task(char *task, char *ans) {
         ans[i] = token_ptr[iter-i-1];
 
     ans[iter] = '\0';
-    return client_id;
+    return client_pid;
 }
 
 
 // Processes string that contains TIME request message
 int time_task(char *task, char *ans) {
 
-    char *token_ptr = strtok(task, " \t");
+    char *token_ptr = strtok(task, " \t\n");
 
     if(token_ptr == NULL)
         return -1;
 
-    int client_id = atoi(token_ptr);
+    int client_pid = atoi(token_ptr);
 
     time_t t = time(NULL);
     struct tm *time = localtime(&t);
     strftime(ans, SI_MESSAGE_MAX_SIZE, "%c", time);
 
-    return client_id;
+    return client_pid;
 }
 
 
-void process_message(struct string_message *message) {
-    //TODO
+// Opens new client's message queue
+int register_new_client(char *request, char *ans) {
+
+    // Searching for free slot in clients array
+    int free_place = 0;
+    while(free_place < SI_CLIENTS_LIMIT) {
+        if(clients[free_place].id == -1)
+            break;
+
+        free_place++;
+    }
+
+    if(free_place == SI_CLIENTS_LIMIT)
+        return -1;
+
+    char *token_ptr = strtok(request, " \t\n");
+    if(token_ptr == NULL)
+        return -1;
+
+    int new_client_pid = atoi(token_ptr);
+
+    token_ptr = strtok(NULL, " \t\n");
+    if(token_ptr == NULL)
+        return -1;
+
+    int queue_id = atoi(token_ptr);
+
+    clients[free_place].pid = new_client_pid;
+    clients[free_place].id = free_place;
+    clients[free_place].queue_id = queue_id;
+
+    sprintf(ans, "Successfully registered with id %d", free_place);
+    return new_client_pid;
 }
+
+
+int remove_client(char *request) {
+
+    char *token_ptr = strtok(request, " \t\n");
+
+    if(token_ptr == NULL)
+        return -1;
+
+    int client_pid = atoi(token_ptr);
+
+    int client_slot;
+    for(client_slot = 0; client_slot < SI_CLIENTS_LIMIT; client_slot++)
+        if(clients[client_slot].pid == client_pid)
+            break;
+
+    if(client_slot == SI_CLIENTS_LIMIT)
+        return -1;
+
+    fprintf(stdout, "removed client %d, pid: %d\n", clients[client_slot].id, clients[client_slot].pid);
+
+    clients[client_slot].id = -1;
+    clients[client_slot].pid = -1;
+    return 0;
+}
+
+// ==================================================================================================
+// ==================================================================================================
+// ==================================================================================================
 
 
 // Creates server queue at the beginning of the program
@@ -138,16 +231,48 @@ void create_server_queue() {
 }
 
 
-// Sends message to given queue
-void send_string_message(int client_id, long type, const char *message) {
+// Waits for request and send response
+void process_request() {
 
     struct string_message msg;
-    msg.type = type;
-    strcpy(msg.message, message);
 
-    //TODO
-    //if(msgsnd(queue_id, &msg, sizeof(struct string_message), ))
+    if(msgrcv(server_queue_id, &msg, SI_MESSAGE_MAX_SIZE, (SI_REQ_END - 1) * (-1), IPC_NOWAIT) == -1)
+        msgrcv(server_queue_id, &msg, SI_MESSAGE_MAX_SIZE, 0, 0);
+
+    fprintf(stdout, "received message type %ld: %s\n", msg.type, msg.message);
+
+    int client_pid;
+    char ans[SI_MESSAGE_MAX_SIZE];
+
+    if(msg.type == SI_REQ_REGISTER) {
+        client_pid = register_new_client(msg.message, ans);
+        send_string_message(client_pid, SI_ACCEPTED, ans);
+    }
+
+    else if(msg.type == SI_REQ_TIME) {
+        client_pid = time_task(msg.message, ans);
+        send_string_message(client_pid, SI_ACCEPTED, ans);
+    }
+
+    else if(msg.type == SI_REQ_CALC) {
+        client_pid = calc_task(msg.message, ans);
+        send_string_message(client_pid, SI_ACCEPTED, ans);
+    }
+
+    else if(msg.type == SI_REQ_MIRROR) {
+        client_pid = mirror_task(msg.message, ans);
+        send_string_message(client_pid, SI_ACCEPTED, ans);
+    }
+
+    else if(msg.type == SI_REQ_STOP) {
+        remove_client(msg.message);
+    }
+
+    else if(msg.type == SI_REQ_END)
+        end_request_received = 1;
+
 }
+
 
 // Function used when exiting from program - deletes server queue
 static void exit_fun() {
@@ -159,13 +284,23 @@ static void exit_fun() {
     }
 }
 
+// Function used for handling SIGINT
+void sig_int(int signo) {
+
+    fprintf(stderr, "SIGINT received - closing server\n");
+    exit(1);
+}
+
 
 int main(int argc, char** argv) {
 
     server_queue_id = -1;
+    end_request_received = 0;
 
-    for(int i = 0; i < SI_CLIENTS_LIMIT; i++)
-        client_queue_id[i] = -1;
+    for(int i = 0; i < SI_CLIENTS_LIMIT; i++) {
+        clients[i].id = -1;
+        clients[i].pid = -1;
+    }
 
     if (atexit(exit_fun) != 0) {
 
@@ -173,24 +308,22 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
+    // struct sigaction setup
+    struct sigaction act_int;
+    act_int.sa_handler = sig_int;
+    sigemptyset(&act_int.sa_mask);
+    act_int.sa_flags = 0;
+
+    // Setting handler for SIGINT
+    if(sigaction(SIGINT, &act_int, NULL) == -1) {
+
+        perror("Cannot set SIGINT signal handler");
+        exit(1);
+    }
+
     create_server_queue();
 
-    char *buffer1 = malloc(30);
-    char *buffer2 = malloc(30);
-
-    sprintf(buffer1, "2341 DIV 16 -16");
-    int id;
-    if((id = calc_task(buffer1, buffer2)) == -1)
-        printf("no i hui\n");
-
-    else
-        printf("%d: %s\n", id, buffer2);
-
-    sprintf(buffer1, "2134 reverse string");
-    mirror_task(buffer1, buffer2);
-    printf("%s\n", buffer2);
-
-    time_task(buffer1, buffer2);
-    printf("%s\n", buffer2);
+    while(end_request_received == 0)
+        process_request();
 
 }
