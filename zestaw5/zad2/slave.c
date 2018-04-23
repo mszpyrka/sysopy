@@ -16,7 +16,7 @@ void print_usage() {
 
 int main(int argc, char **argv) {
 
-    srand(time(NULL));
+    srand(getpid());
 
     if(argc != 3) {
         print_usage();
