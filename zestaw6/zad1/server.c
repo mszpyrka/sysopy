@@ -15,6 +15,7 @@
 
 int server_queue_id;
 int end_request_received;
+int rejected_client_queue_id;
 
 struct client {
     int pid;
@@ -34,19 +35,29 @@ struct string_message {
 // Sends message to given queue
 int send_string_message(int client_pid, long type, const char *message) {
 
-    int client_slot;
-    for(client_slot = 0; client_slot < SI_CLIENTS_LIMIT; client_slot++)
-        if(clients[client_slot].pid == client_pid)
-            break;
+    int q_id;
 
-    if(client_slot == SI_CLIENTS_LIMIT)
-        return -1;
+    if(client_pid == -1)
+        q_id = rejected_client_queue_id;
+
+    else {
+
+        int client_slot;
+        for(client_slot = 0; client_slot < SI_CLIENTS_LIMIT; client_slot++)
+            if(clients[client_slot].pid == client_pid)
+                break;
+
+        if(client_slot == SI_CLIENTS_LIMIT)
+            return -1;
+
+        q_id = clients[client_slot].queue_id;
+    }
 
     struct string_message msg;
     msg.type = type;
     strcpy(msg.message, message);
 
-    if(msgsnd(clients[client_slot].queue_id, &msg, SI_MESSAGE_MAX_SIZE, 0) == -1) {
+    if(msgsnd(q_id, &msg, SI_MESSAGE_MAX_SIZE, 0) == -1) {
         fprintf(stderr, "Could not successfully send message \"%s\": ", message);
         perror("");
     }
@@ -72,14 +83,18 @@ int calc_task(char *task, char *ans) {
     for(int i = 0; i < 3; i++) {
         token_ptr = strtok(NULL, " \t\n");
 
-        if(token_ptr == NULL)
-            return -1;
+        if(token_ptr == NULL) {
+            sprintf(ans, "invalid operation");
+            return client_pid;
+        }
 
         tokens[i] = token_ptr;
     }
 
-    if(strtok(NULL, " \n") != NULL)
-        return -1;
+    if(strtok(NULL, " \n") != NULL) {
+        sprintf(ans, "invalid operation");
+        return client_pid;
+    }
 
     int a = atoi(tokens[1]);
     int b = atoi(tokens[2]);
@@ -97,8 +112,10 @@ int calc_task(char *task, char *ans) {
     else if(strcmp(tokens[0], "DIV") == 0)
         result = a / b;
 
-    else
-        return -1;
+    else {
+        sprintf(ans, "invalid operation");
+        return client_pid;
+    }
 
     sprintf(ans, "%d", result);
     return client_pid;
@@ -159,9 +176,6 @@ int register_new_client(char *request, char *ans) {
         free_place++;
     }
 
-    if(free_place == SI_CLIENTS_LIMIT)
-        return -1;
-
     char *token_ptr = strtok(request, " \t\n");
     if(token_ptr == NULL)
         return -1;
@@ -173,6 +187,12 @@ int register_new_client(char *request, char *ans) {
         return -1;
 
     int queue_id = atoi(token_ptr);
+
+    if(free_place == SI_CLIENTS_LIMIT) {
+        sprintf(ans, "No more free slots");
+        rejected_client_queue_id = queue_id;
+        return -3;
+    }
 
     clients[free_place].pid = new_client_pid;
     clients[free_place].id = free_place;
@@ -244,34 +264,40 @@ void process_request() {
     int client_pid;
     char ans[SI_MESSAGE_MAX_SIZE];
 
-    if(msg.type == SI_REQ_REGISTER) {
+    if(msg.type == SI_REQ_REGISTER)
         client_pid = register_new_client(msg.message, ans);
-        send_string_message(client_pid, SI_ACCEPTED, ans);
-    }
 
-    else if(msg.type == SI_REQ_TIME) {
+    else if(msg.type == SI_REQ_TIME)
         client_pid = time_task(msg.message, ans);
-        send_string_message(client_pid, SI_ACCEPTED, ans);
-    }
 
-    else if(msg.type == SI_REQ_CALC) {
+    else if(msg.type == SI_REQ_CALC)
         client_pid = calc_task(msg.message, ans);
-        send_string_message(client_pid, SI_ACCEPTED, ans);
-    }
 
-    else if(msg.type == SI_REQ_MIRROR) {
+    else if(msg.type == SI_REQ_MIRROR)
         client_pid = mirror_task(msg.message, ans);
-        send_string_message(client_pid, SI_ACCEPTED, ans);
-    }
 
     else if(msg.type == SI_REQ_STOP) {
         remove_client(msg.message);
+        client_pid = -2;
     }
 
     else if(msg.type == SI_REQ_END)
         end_request_received = 1;
 
+
+    if(client_pid == -1)
+        fprintf(stdout, "unknown client's pid\n");
+
+    else if(client_pid == -3) {
+        send_string_message(-1, SI_REJECTED, ans);
+        fprintf(stdout, "Cannot register new client - no more free slots\n");
+    }
+
+    else if(client_pid > 0)
+        send_string_message(client_pid, SI_ACCEPTED, ans);
+
 }
+
 
 
 // Function used when exiting from program - deletes server queue

@@ -2,7 +2,7 @@
 #define SERVER_INFO_H
 
 
-#define SI_CLIENTS_LIMIT    30
+#define SI_CLIENTS_LIMIT    3
 
 #define SI_IPC_KEY_NUMBER   15
 
