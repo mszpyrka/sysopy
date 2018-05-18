@@ -3,6 +3,9 @@
 #include <string.h>
 #include <time.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 // Represents a range of image collumns -> [begin; end)
 struct range {
@@ -55,15 +58,16 @@ void process_single_pixel(int row, int column) {
     output_image[row][column] = min(255, max(0, round2(result)));
 }
 
-// calculates collumn ranges that cover the whole input image
-void split_image() {
+// calculates equal-sized pixel ranges that cover the whole input image
+void split_image(int parts_number) {
 
-    int base_range_size = image_width / threads_number;
-    int excess = image_width - (base_range_size * threads_number);
+    int pixels_number = image_width * image_height;
+    int base_range_size = pixels_number / parts_number;
+    int excess = pixels_number - (base_range_size * parts_number);
 
     int range_begin = 0;
 
-    for(int i = 0; i < threads_number; i++) {
+    for(int i = 0; i < parts_number; i++) {
 
         int range_end = range_begin + base_range_size;
         if(i < excess)
@@ -74,6 +78,21 @@ void split_image() {
 
         range_begin = range_end;
     }
+}
+
+// Function that each thread uses to process it's part of the image
+void *thread_range_process(void *arg) {
+
+    struct range *pixel_range = (struct range*) arg;
+
+    for(int i =pixel_range -> begin; i < pixel_range -> end; i++) {
+
+        int row = i / image_width;
+        int column = i % image_width;
+        process_single_pixel(row, column);
+    }
+
+    return NULL;
 }
 
 // Allocates all global arrays
@@ -96,7 +115,7 @@ void allocate_global_memory() {
 }
 
 // Loads data from input_image and filter files
-void read_files(const char *input_file, const char *filter_file) {
+void initialize_global_memory(const char *input_file, const char *filter_file) {
 
     FILE *input_fp = fopen(input_file, "r");
     FILE *filter_fp = fopen(filter_file, "r");
@@ -150,6 +169,22 @@ void save_output(const char *output_file) {
     fclose(output_fp);
 }
 
+// Function used to calculate time interval between two timeval structures
+double subtract_time(struct timeval a, struct timeval b)
+{
+    double tmp_a = ((double) a.tv_sec)  + (((double) a.tv_usec) / 1000000);
+    double tmp_b = ((double) b.tv_sec)  + (((double) b.tv_usec) / 1000000);
+    return tmp_a - tmp_b;
+}
+
+// Prints properly formatted time
+void print_time(double t)
+{
+    int minutes = (int) (t / 60);
+    double seconds = t - minutes * 60;
+    printf("%dm%.4fs\n", minutes, seconds);
+}
+
 
 void print_usage() {
 
@@ -165,11 +200,45 @@ int main(int argc, char** argv) {
     }
 
     threads_number = atoi(argv[1]);
-    read_files(argv[2], argv[3]);
+    initialize_global_memory(argv[2], argv[3]);
 
-    for(int i = 0; i < image_height; i++)
-        for(int j = 0; j < image_height; j++)
-            process_single_pixel(i, j);
+    // Saves star times of main code execution
+    struct rusage ru_start, ru_end;
+    struct timeval sys_start, sys_end, user_start, user_end;
+    clock_t real_start, real_end;
+
+    real_start = clock();
+    getrusage(RUSAGE_SELF, &ru_start);
+
+
+    // Filters image with multiple threads
+    split_image(threads_number);
+
+    pthread_t threads[threads_number];
+
+    for(int i = 0; i < threads_number; i++)
+        pthread_create(threads + i, NULL, thread_range_process, ranges + i);
+
+    for(int i = 0; i < threads_number; i++)
+        pthread_join (threads[i], NULL);
+
+
+    // Saves end time
+    real_end = clock();
+    getrusage(RUSAGE_SELF, &ru_end);
+
+    sys_start = ru_start.ru_stime;
+    user_start = ru_start.ru_utime;
+    sys_end = ru_end.ru_stime;
+    user_end = ru_end.ru_utime;
+
+    printf("image filtering execution time:\n");
+    printf("real\t");
+    print_time(((double) real_end - real_start) / CLOCKS_PER_SEC);
+    printf("user\t");
+    print_time(subtract_time(user_end, user_start));
+    printf("sys\t");
+    print_time(subtract_time(sys_end, sys_start));
 
     save_output(argv[4]);
 }
