@@ -4,6 +4,7 @@
 #include <sys/ipc.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <semaphore.h>
 #include "general.h"
 
 void init_queue(struct queue *q, int size) {

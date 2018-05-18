@@ -13,7 +13,6 @@
 #define SEM_CHAIR_NAME      "/sem_chair"  // Semaphore used to control access to barber's chair
 #define SEM_SHAVING_NAME    "/sem_shaving"  // Semaphore used to control shaving process of a single client
 #define SEM_SHVROOM_NAME    "/sem_shvroom"
-#define SEM_TASK_DONE_NAME  "/sem_task"     // Additional semaphore used to indicate that some process finished some task
 #define MEM_BRBSHOP_NAME    "/mem_brbshop"  // Shared memory segment containing a barbershop structure
 
 struct queue {

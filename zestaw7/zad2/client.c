@@ -18,7 +18,6 @@ sem_t *sem_wtroom_ptr;
 sem_t *sem_chair_ptr;
 sem_t *sem_shaving_ptr;
 sem_t *sem_shvroom_ptr;
-sem_t *sem_task_done_ptr;
 struct barbershop *shared_barbershop;
 
 int invited;
@@ -31,7 +30,6 @@ void open_barbershop() {
     sem_chair_ptr = sem_open(SEM_CHAIR_NAME, 0);
     sem_shaving_ptr = sem_open(SEM_SHAVING_NAME, 0);
     sem_shvroom_ptr = sem_open(SEM_SHVROOM_NAME, 0);
-    //sem_task_done_ptr = sem_open(SEM_TASK_DONE_NAME, 0);
 
     if(sem_wtroom_ptr == SEM_FAILED || sem_chair_ptr == SEM_FAILED
         || sem_shaving_ptr == SEM_FAILED || sem_shvroom_ptr == SEM_FAILED) {

@@ -33,7 +33,6 @@ void initialize_barbershop(int waiting_room_size) {
     sem_chair_ptr = sem_open(SEM_CHAIR_NAME, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 0);
     sem_shaving_ptr = sem_open(SEM_SHAVING_NAME, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 0);
     sem_shvroom_ptr = sem_open(SEM_SHVROOM_NAME, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 0);
-    //sem_task_done_ptr = sem_open(SEM_TASK_DONE_NAME, O_CREAT | O_EXCL, O_RDWR, 0);
 
     // Shared memory segment setup
     mem_barbershop_fd = shm_open(MEM_BRBSHOP_NAME, O_CREAT | O_EXCL | O_RDWR, S_IWUSR | S_IRUSR);
@@ -82,11 +81,8 @@ void fall_asleep() {
 // Performs all operations related to the process of shaving client
 void shave_client() {
 
-//    sem_post(sem_shaving_ptr);       // Sets shaving semaphore
     sem_post(sem_shvroom_ptr);       // Unlocks access to the shaving room
-
     sem_wait(sem_chair_ptr);         // Blocks until client takes a sit on the chair
-    //sem_wait_for_zero(sem_chair_ptr);    // Blocks until the client takes a sit
 
     print_time_message("");         // Begins shaving
     fprintf(stdout, "starting shaving client %d\n", shared_barbershop -> shaved_client_pid);
@@ -95,10 +91,6 @@ void shave_client() {
     fprintf(stdout, "finishing shaving client %d\n", shared_barbershop -> shaved_client_pid);
 
     sem_post(sem_shaving_ptr);      // Signalizes the ending of the shaving
-
-//    sem_decrease(sem_shaving_ptr);   // Unsets shaving semaphore
-//    sem_decrease(sem_shvroom_ptr);   // Locks back the shaving room
-//    sem_decrease(sem_chair_ptr);     // Restores chair's locked state
 }
 
 // Checks whether there are any clients waiting, if so - invites the first one to the shaving room (and returns 1), if not - returns 0
@@ -165,15 +157,6 @@ static void exit_fun() {
 
         if(sem_unlink(SEM_SHVROOM_NAME) == -1)
             perror("Error occurred while unlinking shaving room semaphore");
-    }
-
-    if(sem_task_done_ptr != (sem_t*)-1) {
-
-        if(sem_close(sem_task_done_ptr) == -1)
-            perror("Error occurred while deleting task semaphore");
-
-        if(sem_unlink(SEM_TASK_DONE_NAME) == -1)
-            perror("Error occurred while unlinking task semaphore");
     }
 }
 
