@@ -25,6 +25,7 @@ int buffer_write(struct cyclic_buffer *buf, const char *string) {
 
     int position = (buf -> back - 1 + buf -> max_size) % buf -> max_size;
     buf -> strings[position] = malloc(sizeof(char) * (strlen(string) + 1));
+    strcpy(buf -> strings[position], string);
     buf -> back = position;
     buf -> current_size++;
 
@@ -38,6 +39,7 @@ int buffer_read(struct cyclic_buffer *buf, char *string) {
 
     int position = buf -> front;
     strcpy(string, buf -> strings[position]);
+
     free(buf -> strings[position]);
     buf -> front = (buf -> front - 1 + buf -> max_size) % buf -> max_size;
     buf -> current_size--;
