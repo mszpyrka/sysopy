@@ -204,10 +204,11 @@ int main(int argc, char** argv) {
 
     // Saves star times of main code execution
     struct rusage ru_start, ru_end;
-    struct timeval sys_start, sys_end, user_start, user_end;
-    clock_t real_start, real_end;
+    struct timeval sys_start, sys_end, user_start, user_end, real_start, real_end;
 
-    real_start = clock();
+    struct timespec real_start_ts, real_end_ts;
+    clock_gettime(CLOCK_MONOTONIC, &real_start_ts);
+
     getrusage(RUSAGE_SELF, &ru_start);
 
 
@@ -224,8 +225,13 @@ int main(int argc, char** argv) {
 
 
     // Saves end time
-    real_end = clock();
+    clock_gettime(CLOCK_MONOTONIC, &real_end_ts);
     getrusage(RUSAGE_SELF, &ru_end);
+
+    real_start.tv_sec = real_start_ts.tv_sec;
+    real_start.tv_usec = real_start_ts.tv_nsec / 1000;
+    real_end.tv_sec = real_end_ts.tv_sec;
+    real_end.tv_usec = real_end_ts.tv_nsec / 1000;
 
     sys_start = ru_start.ru_stime;
     user_start = ru_start.ru_utime;
@@ -234,7 +240,7 @@ int main(int argc, char** argv) {
 
     printf("image filtering execution time:\n");
     printf("real\t");
-    print_time(((double) real_end - real_start) / CLOCKS_PER_SEC);
+    print_time(subtract_time(real_end, real_start));
     printf("user\t");
     print_time(subtract_time(user_end, user_start));
     printf("sys\t");

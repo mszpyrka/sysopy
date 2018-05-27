@@ -1,0 +1,21 @@
+5
+6
+120
+settings
+12
+< 
+simple
+0
+
+
+
+# format:
+
+P - producers number
+K - consumers number
+N - buffer size
+file - input file name
+L - compare constant
+SM - search mode: [ < | = | > ]
+LM - logging mode: [ simple | verbose ]
+nk - process termination condition ( nk=0 -> after document ends, nk>0 -> after nk seconds )
