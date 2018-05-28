@@ -2,6 +2,7 @@
 #define TASK9_GENERAL_H
 
 #define CYCLIC_BUFFER_MAX_SIZE  128
+#define TEXT_BUFFER_SIZE 1024
 
 
 struct cyclic_buffer {

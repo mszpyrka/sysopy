@@ -33,7 +33,7 @@ int logging_mode;
 int term_condition;
 
 char *text_buffer;
-#define TEXT_BUFFER_SIZE 256
+#define TEXT_BUFFER_SIZE 1024
 
 
 // Reads all settings from settings file and opens input file.
