@@ -13,10 +13,13 @@
 #include <pthread.h>
 #include "general.h"
 
-sem_t *sem_buffer; 
-sem_t *sem_empty_slots;
-sem_t *sem_filled_slots;
-sem_t *sem_file_lock;
+pthread_cond_t cond_buffer = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mut_file = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mut_buffer = PTHREAD_MUTEX_INITIALIZER;
+
+int filled_slots;
+int empty_slots;
+
 struct cyclic_buffer products_buffer;
 
 int producers_number;
@@ -82,17 +85,17 @@ void read_settings(const char *settings_file) {
 // Reads next line from input file
 int read_next_line(char *buffer) {
 
-    sem_wait(sem_file_lock);
+    pthread_mutex_lock(&mut_file);
 
     size_t size = TEXT_BUFFER_SIZE;
     if(getline(&text_buffer, &size, input_file) == -1) {
-        sem_post(sem_file_lock);
+        pthread_mutex_unlock(&mut_file);
         return -1;
     }
     
     strcpy(buffer, text_buffer);
     buffer[strlen(buffer) - 1] = (char)0;
-    sem_post(sem_file_lock);
+    pthread_mutex_unlock(&mut_file);
 
     return 0;
 }
@@ -102,30 +105,8 @@ void initialize_memory() {
 
     init_cyclic_buffer(&products_buffer, buffer_size);
 
-    sem_buffer = malloc(sizeof(sem_t));
-    sem_empty_slots = malloc(sizeof(sem_t));
-    sem_filled_slots = malloc(sizeof(sem_t));
-    sem_file_lock = malloc(sizeof(sem_t));
-
-    if(sem_init(sem_buffer, 0, 1) != 0) {
-        perror("Error occurred while creating buffer semaphore");
-        exit(1);
-    }
-
-    if(sem_init(sem_empty_slots, 0, buffer_size) != 0) {
-        perror("Error occurred while creating empty slots semaphore");
-        exit(1);
-    }
-
-    if(sem_init(sem_filled_slots, 0, 0) != 0) {
-        perror("Error occurred while creating filled slots semaphore");
-        exit(1);
-    }
-
-    if(sem_init(sem_file_lock, 0, 1) != 0) {
-        perror("Error occurred while creating file lock semaphore");
-        exit(1);
-    }
+    empty_slots = buffer_size;
+    filled_slots = 0;
 }
 
 
@@ -133,18 +114,23 @@ void initialize_memory() {
 int produce() {
     char line[TEXT_BUFFER_SIZE];
 
-    sem_wait(sem_empty_slots);
-    sem_wait(sem_buffer);
+    pthread_mutex_lock(&mut_buffer);
+
+    while(empty_slots == 0)
+        pthread_cond_wait(&cond_buffer, &mut_buffer);
 
     if(read_next_line(line) == -1) {
-        sem_post(sem_filled_slots);
-        sem_post(sem_buffer);
+        filled_slots++;
+        pthread_cond_broadcast(&cond_buffer);
+        pthread_mutex_unlock(&mut_buffer);
         return -1;
     }
     int position = buffer_write(&products_buffer, line);
 
-    sem_post(sem_filled_slots);
-    sem_post(sem_buffer);
+    filled_slots++;
+    empty_slots--;
+    pthread_cond_broadcast(&cond_buffer);
+    pthread_mutex_unlock(&mut_buffer);
     return position;
 }
 
@@ -168,14 +154,17 @@ int satisfies_condition(int length) {
 int consume() {
     char line[TEXT_BUFFER_SIZE];
 
-    sem_wait(sem_filled_slots);
-    sem_wait(sem_buffer);
+    pthread_mutex_lock(&mut_buffer);
+
+    while(filled_slots == 0)
+        pthread_cond_wait(&cond_buffer, &mut_buffer);
 
     int position = buffer_read(&products_buffer, line);
 
     if(position == -1) {
-        sem_post(sem_filled_slots);
-        sem_post(sem_buffer);
+        filled_slots++;
+        pthread_cond_broadcast(&cond_buffer);
+        pthread_mutex_unlock(&mut_buffer);
         return -1;
     }
     
@@ -185,8 +174,10 @@ int consume() {
         print_log(result, 0);
     }
 
-    sem_post(sem_empty_slots);
-    sem_post(sem_buffer);
+    filled_slots--;
+    empty_slots++;
+    pthread_cond_broadcast(&cond_buffer);
+    pthread_mutex_unlock(&mut_buffer);
     return 0;
 }
 
@@ -214,36 +205,6 @@ void *consumer_thread_function(void *arg) {
 }
 
 
-// Function used when exiting from program - deletes all created IPC structures
-static void exit_fun() {
-
-    if(sem_buffer != (sem_t*)-1) {
-
-        if(sem_destroy(sem_buffer))
-            perror("Error occurred while deleting buffer semaphore");
-    }
-
-    if(sem_empty_slots != (sem_t*)-1) {
-
-        if(sem_destroy(sem_empty_slots))
-            perror("Error occurred while deleting empty slots semaphore");
-    }
-
-    if(sem_filled_slots != (sem_t*)-1) {
-
-        if(sem_destroy(sem_filled_slots))
-            perror("Error occurred while deleting filled slots semaphore");
-    }
-
-    if(sem_file_lock != (sem_t*)-1) {
-
-        if(sem_destroy(sem_file_lock))
-            perror("Error occurred while deleting file lock semaphore");
-    }
-}
-
-
-
 // Function used for handling SIGINT
 void sig_int(int signo) {
 
@@ -259,18 +220,7 @@ void print_usage() {
 
 int main(int argc, char** argv) {
 
-    sem_buffer = (sem_t*)-1;
-    sem_empty_slots = (sem_t*)-1;
-    sem_filled_slots = (sem_t*)-1;
-    sem_file_lock = (sem_t*)-1;
-
     text_buffer = malloc(sizeof(char) * TEXT_BUFFER_SIZE);
-
-    if (atexit(exit_fun) != 0) {
-
-        perror("Cannot set atexit function");
-        exit(1);
-    }
 
     // struct sigaction setup
     struct sigaction act_int;
