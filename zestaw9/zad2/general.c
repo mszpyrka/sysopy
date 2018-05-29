@@ -50,7 +50,7 @@ int buffer_read(struct cyclic_buffer *buf, char *string) {
 // Logs a message to stderr
 void print_log(const char *message, int producer) {
 
-    char buffer[128];
+    char buffer[TEXT_BUFFER_SIZE];
     if(producer == 1)
         sprintf(buffer, "[log - producer %ld] ", pthread_self());
 

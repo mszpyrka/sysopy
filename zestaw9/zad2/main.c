@@ -30,7 +30,6 @@ int logging_mode;
 int term_condition;
 
 char *text_buffer;
-#define TEXT_BUFFER_SIZE 256
 
 
 // Reads all settings from settings file and opens input file.
@@ -143,6 +142,13 @@ int produce() {
     }
     int position = buffer_write(&products_buffer, line);
 
+    if(logging_mode == 1) {
+
+        char result[TEXT_BUFFER_SIZE + 50];
+        sprintf(result, "saving line at %d: \"%s\"", position, line);
+        print_log(result, 1);
+    }
+
     sem_post(sem_filled_slots);
     sem_post(sem_buffer);
     return position;
@@ -178,10 +184,17 @@ int consume() {
         sem_post(sem_buffer);
         return -1;
     }
+
+    if(logging_mode == 1) {
+
+        char result[TEXT_BUFFER_SIZE + 50];
+        sprintf(result, "reading line from %d: \"%s\"", position, line);
+        print_log(result, 0);
+    }
     
     if(satisfies_condition(strlen(line)) == 1) {
-        char result[TEXT_BUFFER_SIZE + 20];
-        sprintf(result, "%d: \"%s\"", position, line);
+        char result[TEXT_BUFFER_SIZE + 50];
+        sprintf(result, "match found at %d: \"%s\"", position, line);
         print_log(result, 0);
     }
 
@@ -196,6 +209,9 @@ void *producer_thread_function(void *arg) {
     while(1) {
 
         if(produce() == -1) {
+
+            if(logging_mode == 1)
+                print_log("end of file - ending thread", 1);
        
             return (void*)0;
         }
@@ -207,12 +223,14 @@ void *consumer_thread_function(void *arg) {
     while(1) {
 
         if(consume() == -1){
+
+            if(logging_mode == 1)
+                print_log("no more products - ending thread", 0);
          
             return (void*)0;
         }
     }
 }
-
 
 // Function used when exiting from program - deletes all created IPC structures
 static void exit_fun() {
@@ -296,9 +314,6 @@ int main(int argc, char** argv) {
 
     initialize_memory();
 
-    printf("%d, %d, %d, %d, %d, %d, %d\n", consumers_number, producers_number, buffer_size,
-        compare_constant, search_mode, logging_mode, term_condition);
-
     fflush(stdout);
 
     pthread_t threads[producers_number + consumers_number];
@@ -308,6 +323,12 @@ int main(int argc, char** argv) {
 
     for(int i = producers_number; i < producers_number + consumers_number; i++)
         pthread_create(threads + i, NULL, consumer_thread_function, NULL);
+
+    if(term_condition > 0) {
+
+        sleep(term_condition);
+        exit(0);
+    }
 
     for(int i = 0; i < producers_number + consumers_number; i++)
         pthread_join (threads[i], NULL);
