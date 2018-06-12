@@ -12,7 +12,7 @@
 #define SERVER_NAME             "cluster_supervisor"
 #define SERVER_CLIENTS_LIMIT    30
 #define PING_INTERVAL           5
-#define PING_TIMEOUT            1
+#define PING_TIMEOUT            5
 
 // client settings:
 

@@ -207,9 +207,10 @@ int get_input_ready_fd(struct pollfd sockets[], int sockets_length) {
 // ================================= MANAGING INCOMING MESSAGES ============================================
 
 // Removes client from registered_clients array
-int remove_client(int client_fd) {
+int remove_client(int client_fd, int lock) {
 
-    pthread_mutex_lock(&mut_clients);
+    if(lock == 1)
+        pthread_mutex_lock(&mut_clients);
 
     for(int i = 0; i < SERVER_CLIENTS_LIMIT; i++)
         if(registered_clients[i].socket_fd == client_fd) {
@@ -220,12 +221,14 @@ int remove_client(int client_fd) {
             registered_clients[i].name[0] = '\0';
             close(client_fd);
 
-            pthread_mutex_unlock(&mut_clients);
+            if(lock == 1)
+                pthread_mutex_unlock(&mut_clients);
 
             return 1;
         }
 
-    pthread_mutex_unlock(&mut_clients);
+    if(lock == 1)
+        pthread_mutex_unlock(&mut_clients);
 
     return 0;
 }
@@ -241,7 +244,7 @@ int register_client(int client_fd, const char *name) {
             fprintf(stdout, "client's name %s already in use\n", name);
 
             send_login_message(client_fd, "rejected");
-            remove_client(client_fd);
+            remove_client(client_fd, 0);
             pthread_mutex_unlock(&mut_clients);
             return 0;
         }
@@ -251,6 +254,8 @@ int register_client(int client_fd, const char *name) {
 
             strcpy(registered_clients[i].name, name);
             registered_clients[i].registered = 1;
+            registered_clients[i].active = 1;
+            
             fprintf(stdout, "client's name %s successfully registered\n", name);
 
             send_login_message(client_fd, "accepted");
@@ -290,7 +295,7 @@ void process_message(int client_fd, const char message[RAW_MESSAGE_SIZE]) {
         struct login_message lm = get_login_message(message);
 
         if(strcmp(lm.string, "logout") == 0)
-            remove_client(client_fd);
+            remove_client(client_fd, 1);
 
         else 
             register_client(client_fd, lm.string);
@@ -298,8 +303,8 @@ void process_message(int client_fd, const char message[RAW_MESSAGE_SIZE]) {
 
     else if(msg_type == MSG_PING) {
 
-        struct ping_message pm = get_ping_message(message);
-        fprintf(stdout, "ping response, id: %d\n", pm.ping_id);
+        //struct ping_message pm = get_ping_message(message);
+        //fprintf(stdout, "ping response, id: %d\n", pm.ping_id);
         set_active(client_fd);
     }
 
@@ -340,7 +345,7 @@ void *connection_manager_thread(void *arg) {
 
         for(int i = 0; i < SERVER_CLIENTS_LIMIT; i++)
             if(sockets[i].revents & POLLHUP) {
-                remove_client(sockets[i].fd);
+                remove_client(sockets[i].fd, 1);
                 sockets[i].revents = 0;
             }
 
@@ -418,6 +423,7 @@ void *ping_manager_thread(void *arg) {
 
         pthread_mutex_unlock(&mut_clients);
 
+        //fprintf(stdout, "waiting for responses\n");
         sleep(PING_TIMEOUT);
 
         pthread_mutex_lock(&mut_clients);
@@ -445,23 +451,71 @@ int get_next_registered_client(int starting_point) {
 
     pthread_mutex_lock(&mut_clients);
 
-    int iter = starting_point + 1;
+    int iter = (starting_point + 1) % SERVER_CLIENTS_LIMIT;
 
-    while(iter != starting_point) {
 
-        iter %= SERVER_CLIENTS_LIMIT;
+    for(int i = 0; i < SERVER_CLIENTS_LIMIT - 1; i++) {
+
         if(registered_clients[iter].registered == 1) {
 
             pthread_mutex_unlock(&mut_clients);
             return iter;
         }
 
-        iter++;
+        iter = (iter + 1) % SERVER_CLIENTS_LIMIT;
     }
 
     pthread_mutex_unlock(&mut_clients);
     return -1;
 }
+
+// Processes string that contains calc request
+int get_calc_task(char *message, struct task_message *task) {
+
+    // request expects exactly 3 tokens
+    char *token_ptr;
+    char *tokens[3];
+
+    token_ptr = strtok(message, " \t\n");
+    
+    if(token_ptr == NULL)
+        return -1;
+
+    tokens[0] = token_ptr;
+
+    for(int i = 1; i < 3; i++) {
+        token_ptr = strtok(NULL, " \t\n");
+
+        if(token_ptr == NULL)
+            return -1;
+
+        tokens[i] = token_ptr;
+    }
+
+    if(strtok(NULL, " \n") != NULL)
+        return -1;
+
+    task->operand1 = atoi(tokens[1]);
+    task->operand2 = atoi(tokens[2]);
+
+    if(strcmp(tokens[0], "ADD") == 0)
+        task->task_type = TASK_ADD;
+
+    else if(strcmp(tokens[0], "SUB") == 0)
+        task->task_type = TASK_SUB;
+
+    else if(strcmp(tokens[0], "MUL") == 0)
+        task->task_type = TASK_MUL;
+
+    else if(strcmp(tokens[0], "DIV") == 0)
+        task->task_type = TASK_DIV;
+
+    else    
+        return -1;
+
+    return 0;
+}
+
 
 // Reads input on server's terminal and sends tasks to clients.
 void *input_manager_thread(void *arg) {
@@ -475,60 +529,26 @@ void *input_manager_thread(void *arg) {
 
     while((bytes_read = getline(&buffer, &buffer_size, stdin)) != -1) {
 
-        fprintf(stdout, "%s\n", buffer);
-        // CALC expects exactly 3 tokens
-        char *token_ptr;
-        char *tokens[3];
+        struct task_message task;
+        task.result = 0;
+        if(get_calc_task(buffer, &task) == -1) {
 
-        token_ptr = strtok(buffer, " \t\n");
-        tokens[0] = token_ptr;
-
-        if(token_ptr == NULL) {
-            fprintf(stdout, "invalid input (usage: TASK OPERAND1 OPERAND2)\n");
-            continue;
-        }
-
-        for(int i = 1; i < 3; i++) {
-            token_ptr = strtok(NULL, " \t\n");
-
-            if(token_ptr == NULL) {
-                fprintf(stdout, "invalid input (usage: TASK OPERAND1 OPERAND2)\n");
-                continue;
-            }
-
-            tokens[i] = token_ptr;
-        }
-
-        int a = atoi(tokens[1]);
-        int b = atoi(tokens[2]);
-        int type;
-
-        if(strcmp(tokens[0], "ADD") == 0)
-            type = TASK_ADD;
-
-        else if(strcmp(tokens[0], "SUB") == 0)
-            type = TASK_SUB;
-
-        else if(strcmp(tokens[0], "MUL") == 0)
-            type = TASK_MUL;
-
-        else if(strcmp(tokens[0], "DIV") == 0)
-            type = TASK_DIV;
-
-        else {
-            fprintf(stdout, "invalid input (usage: TASK OPERAND1 OPERAND2\n");
+            fprintf(stdout, "invalid input (usage: OPERATION OPERAND1 OPERAND2)\n");
             continue;
         }
 
         int target_client = get_next_registered_client(previous_client);
 
         if(target_client != -1)
-            send_task_message(target_client, task_id_counter++, type, a, b, 0);
+            send_task_message(registered_clients[target_client].socket_fd,
+                task_id_counter++, task.task_type, task.operand1, task.operand2, 0);
 
         else {
             fprintf(stdout, "no computing clients available\n");
             continue;
         }
+
+        previous_client = target_client;
     }
 
     return (void*) 0;

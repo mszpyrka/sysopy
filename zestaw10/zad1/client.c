@@ -62,9 +62,41 @@ int connect_to_server() {
     return 0;
 }
 
+// Reads input socket and processes read message.
 void process_message() {
 
-    pause();
+    char buffer[RAW_MESSAGE_SIZE];
+    receive_message(server_socket_fd, buffer);
+
+    int msg_type = check_message_type(buffer);
+
+    if(msg_type == MSG_PING) {
+
+        struct ping_message pm = get_ping_message(buffer);
+        fprintf(stdout, "ping request received, id: %d\n", pm.ping_id);
+        send_ping_message(server_socket_fd, pm.ping_id);
+    }
+
+    else if(msg_type == MSG_TASK) {
+
+        struct task_message tm = get_task_message(buffer);
+
+        fprintf(stdout, "task received, id: %d, type: %d, operands: %d, %d\n", tm.task_id, tm.task_type, tm.operand1, tm.operand2);
+
+        if(tm.task_type == TASK_ADD)
+            tm.result = tm.operand1 + tm.operand2;
+
+        else if(tm.task_type == TASK_SUB)
+            tm.result = tm.operand1 - tm.operand2;
+
+        else if(tm.task_type == TASK_MUL)
+            tm.result = tm.operand1 * tm.operand2;
+
+        else if(tm.task_type == TASK_DIV)
+            tm.result = tm.operand1 / tm.operand2;
+
+        send_task_message(server_socket_fd, tm.task_id, tm.task_type, tm.operand1, tm.operand2, tm.result);
+    }
 }
 
 // Function used for handling SIGINT
@@ -73,7 +105,7 @@ void sig_int(int signo) {
     fprintf(stderr, "SIGINT received - closing client\n");
     if(server_socket_fd > 0)
         send_login_message(server_socket_fd, "logout");
-        
+
     exit(0);
 }
 

@@ -17,7 +17,7 @@
 // Sends message to given socket.
 int send_message(int socket_fd, const char message[RAW_MESSAGE_SIZE]) {
 
-        fprintf(stdout, "wysylam %s\n", message);
+    //fprintf(stdout, "wysylam %s\n", message);
 
     return write(socket_fd, message, RAW_MESSAGE_SIZE);
 }
@@ -25,10 +25,10 @@ int send_message(int socket_fd, const char message[RAW_MESSAGE_SIZE]) {
 
 // Receives message from given socket.
 int receive_message(int socket_fd, char message[RAW_MESSAGE_SIZE]) {
-    fprintf(stdout, "odbieram ");
-    read(socket_fd, message, RAW_MESSAGE_SIZE);
-    fprintf(stdout, "%s\n", message);
-    return 1;
+    //fprintf(stdout, "odbieram ");
+    int result = read(socket_fd, message, RAW_MESSAGE_SIZE);
+    //fprintf(stdout, "%s\n", message);
+    return result;
 }
 
 int check_message_type(const char message[RAW_MESSAGE_SIZE]) {
